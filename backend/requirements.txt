@@ -1,0 +1,23 @@
+# === Web Framework ===
+fastapi==0.136.1
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20
+
+# === Database ===
+sqlalchemy==2.0.48
+alembic==1.18.4
+asyncpg==0.30.0
+psycopg2-binary==2.9.10
+
+# === Validation & Settings ===
+pydantic==2.10.4
+pydantic-settings==2.7.1
+python-dotenv==1.0.1
+
+# === HTTP Client ===
+httpx==0.28.1
+
+# === External APIs ===
+google-generativeai==0.8.5
+google-api-python-client==2.156.0
+youtube-transcript-api==0.6.3
