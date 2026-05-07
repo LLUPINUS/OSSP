@@ -1,0 +1,17 @@
+# 모든 텍스트 파일은 LF 줄바꿈으로 통일
+* text=auto eol=lf
+
+# Windows 전용 파일은 CRLF 유지
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 바이너리 파일 명시 (git이 텍스트로 처리하지 않도록)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.pth binary
+*.pt binary
