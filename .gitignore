@@ -1,16 +1,81 @@
-# Python
-backend/.venv/
-backend/__pycache__/
-backend/**/__pycache__/
-backend/.env
-*.pyc
+# === Python (backend, ai) ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Node / Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env.local
+# === Node.js (frontend) ===
+node_modules/
+dist/
+build/
+.next/
+.cache/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
-# Editor
+# === 환경변수 (절대 커밋 금지 - 실제 비밀번호 파일들) ===
+.env
+.env.local
+.env.development
+.env.production
+.env.*.local
+!.env.example
+### .env.example 파일은 제외로 이 파일 보고 .env를 어떻게 채워야 하는지 알려줌
+
+# === IDE / Editor ===
 .vscode/
 .idea/
-*.DS_Store
+*.swp
+*.swo
+*~
+*.sublime-*
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === AI 모델 / 데이터 (대용량) ===
+*.pth
+*.pt
+*.onnx
+*.h5
+*.ckpt
+*.bin
+ai/models/*.pt
+ai/models/*.pth
+ai/data/raw/
+ai/data/processed/
+ai/notebooks/.ipynb_checkpoints/
+
+# === Database 로컬 파일 ===
+*.db
+*.sqlite
+*.sqlite3
+
+# === 빌드 / 배포 ===
+*.pyc
+*.pyo
+*.pyd
+*.egg
+.tox/
+.eggs/
+
+# === 임시 파일 ===
+tmp/
+temp/
+logs/
