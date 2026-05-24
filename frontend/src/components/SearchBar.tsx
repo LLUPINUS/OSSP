@@ -34,7 +34,13 @@ export default function SearchBar() {
     setCookingSteps([]);
     setError(null);
     try {
-      const res = await fetch(`/api/steps?videoId=${video.videoId}`);
+      const params = new URLSearchParams({
+        videoId: video.videoId,
+        title: video.title,
+        channelTitle: video.channelTitle,
+        thumbnail: video.thumbnail,
+      });
+      const res = await fetch(`/api/steps?${params}`);
       if (!res.ok) {
         const detail = await res.json().catch(() => ({}));
         throw new Error(detail?.detail ?? "단계 로드 실패");

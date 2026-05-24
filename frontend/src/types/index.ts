@@ -2,6 +2,7 @@ export interface CookingStep {
   action: string;
   start_time: string;
   end_time: string;
+  gesture?: string;
 }
 
 export interface VideoSearchResult {

@@ -2,7 +2,6 @@ import { useVideoStore } from "../store/useVideoStore";
 
 export default function CookingSteps() {
   const cookingSteps = useVideoStore((s) => s.cookingSteps);
-  const currentStepIndex = useVideoStore((s) => s.currentStepIndex);
 
   if (cookingSteps.length === 0) {
     return (
@@ -19,11 +18,7 @@ export default function CookingSteps() {
         {cookingSteps.map((step, i) => (
           <li
             key={i}
-            className={`p-3 rounded border text-sm ${
-              i === currentStepIndex
-                ? "border-blue-500 bg-blue-50 font-medium"
-                : "border-gray-200"
-            }`}
+            className="p-3 rounded border text-sm border-gray-200"
           >
             <span className="text-gray-400 text-xs mr-2">
               {step.start_time} ~ {step.end_time}
