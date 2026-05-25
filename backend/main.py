@@ -3,8 +3,10 @@ load_dotenv()
 
 from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from api.youtube_search import search_videos
 from api.transcript import get_transcript, format_for_gemini
 from api.gemini_parser import parse_cooking_steps
@@ -20,12 +22,42 @@ except ImportError:
 
 app = FastAPI(title="CV 요리 영상 제어 API")
 
+# CORS: .env의 CORS_ORIGINS를 콤마 구분으로 파싱
+allowed_origins = [
+    origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# === 헬스체크 ===
+
+@app.get("/")
+async def root():
+    """앱 자체 헬스체크. 서버 프로세스가 살아있는지 확인."""
+    return {
+        "service": "CookSync API",
+        "status": "ok",
+        "debug": settings.DEBUG,
+    }
+
+
+if DB_ENABLED:
+    @app.get("/health/db")
+    async def health_db(db: AsyncSession = Depends(get_db)):
+        """DB 연결 헬스체크. PostgreSQL과 통신이 가능한지 확인."""
+        result = await db.execute(text("SELECT 1"))
+        return {
+            "status": "ok",
+            "db": "connected",
+            "result": result.scalar(),
+        }
 
 
 @app.get("/api/search")
