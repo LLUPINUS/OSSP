@@ -16,10 +16,9 @@
 | 영역 | 사용 기술 |
 |------|-----------|
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand |
-| Backend | FastAPI 0.136, PostgreSQL 14+, SQLAlchemy 2.0, Alembic |
+| Backend | FastAPI 0.136, PostgreSQL 18, SQLAlchemy 2.0, Alembic |
 | AI / CV | PyTorch, MediaPipe Tasks API, OpenCV |
 | External APIs | YouTube Data API v3, YouTube IFrame API, Gemini API |
-| Real-time | WebRTC (simple-peer / PeerJS) |
 
 ## 시스템 아키텍처
 추후 추가예정
