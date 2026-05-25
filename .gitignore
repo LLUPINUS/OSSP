@@ -79,3 +79,7 @@ ai/notebooks/.ipynb_checkpoints/
 tmp/
 temp/
 logs/
+
+# Claude / Claude Code
+CLAUDE.md
+.claude/
