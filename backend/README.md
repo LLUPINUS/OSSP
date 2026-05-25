@@ -89,7 +89,7 @@ alembic upgrade head
 ### 7. 개발 서버 실행
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn main:app --reload
 ```
 
 서버가 켜지면 다음 URL로 접속 가능:
