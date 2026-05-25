@@ -7,8 +7,8 @@
 - Vite
 - Tailwind CSS
 - Zustand
-- YouTube IFrame API
-- WebRTC (simple-peer 또는 PeerJS)
+- react-youtube (YouTube IFrame API)
+- @mediapipe/tasks-vision (MediaPipe Tasks)
 
 ## 세팅 가이드
 세팅 방법은 추후 업데이트 예정입니다.

@@ -6,12 +6,12 @@
 
 | 분류 | 사용 기술 | 버전 |
 |------|-----------|------|
-| 언어 | Python | 3.12 |
+| 언어 | Python | 3.11 |
 | 웹 프레임워크 | FastAPI | 0.136.1 |
 | ASGI 서버 | Uvicorn | 0.32.1 |
 | ORM | SQLAlchemy | 2.0.48 |
 | 마이그레이션 | Alembic | 1.18.4 |
-| DB | PostgreSQL | 14 이상 |
+| DB | PostgreSQL | 18 |
 | 비동기 DB 드라이버 | asyncpg | 0.30.0 |
 | 동기 DB 드라이버 | psycopg2-binary | 2.9.10 |
 
@@ -21,8 +21,8 @@
 
 ### 사전 준비
 
-- Python 3.12 설치
-- PostgreSQL 14 이상 설치 및 실행 중인 상태
+- Python 3.11 설치
+- PostgreSQL 18 설치 및 실행 중인 상태
 - pgAdmin4 (선택사항, DB 확인용)
 
 ### 1. backend 폴더로 이동
@@ -99,30 +99,34 @@ uvicorn main:app --reload
 
 `--reload` 옵션은 코드 변경 시 자동으로 서버를 재시작합니다. 개발 중에만 사용하세요.
 
-## 폴더 구조 (예정)
+## 폴더 구조
 
 ```
 backend/
 ├── app/
-│   ├── main.py              # FastAPI 진입점
 │   ├── core/                # 설정, DB 연결
-│   │   ├── config.py        # 환경변수 로드
-│   │   └── database.py      # SQLAlchemy 세션
-│   ├── models/              # SQLAlchemy 모델
-│   ├── schemas/             # Pydantic 요청/응답 스키마
-│   ├── api/routes/          # API 엔드포인트
-│   ├── crud/                # DB 조회/수정 함수
-│   └── services/            # 외부 API 호출 등 비즈니스 로직
+│   │   ├── config.py        # 환경변수 로드 (Settings)
+│   │   └── database.py      # SQLAlchemy 비동기 엔진/세션
+│   └── models/              # SQLAlchemy 모델 (1 테이블 = 1 파일)
+│       ├── recipe.py
+│       ├── transcript.py
+│       ├── action_label.py
+│       └── cooking_step.py
+├── api/                     # 외부 API 클라이언트 + DB 서비스 계층
+│   ├── youtube_search.py    # YouTube Data API 검색
+│   ├── transcript.py        # 자막 추출
+│   ├── gemini_parser.py     # Gemini 단계 분류
+│   └── db_service.py        # DB 저장/조회/캐싱
 ├── alembic/
 │   ├── env.py
 │   └── versions/            # 마이그레이션 스크립트
-├── tests/
+├── main.py                  # FastAPI 진입점
 ├── alembic.ini
 ├── requirements.txt
 └── .env.example
 ```
 
-실제 폴더는 작업이 진행되면서 단계적으로 추가됩니다.
+> 구조는 작업 진행에 따라 계속 정리됩니다 (`app/`와 `api/`의 통합 방향은 협의 중).
 
 ## 자주 쓰는 명령어
 
@@ -159,7 +163,7 @@ pip freeze > requirements.txt
 - 현재 위치가 `backend/` 폴더인지 (`pwd` 또는 `cd`)
 
 ### `psycopg2` 또는 `asyncpg` 설치 실패
-PostgreSQL이 시스템에 설치되어 있지 않으면 발생할 수 있습니다. PostgreSQL 14 이상이 설치되어 있는지 확인하세요.
+PostgreSQL이 시스템에 설치되어 있지 않으면 발생할 수 있습니다. PostgreSQL 18이 설치되어 있는지 확인하세요.
 
 ### DB 연결 실패
 - PostgreSQL 서비스가 실행 중인지 확인
