@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     # === Database ===
     DATABASE_URL: str           # FastAPI 비동기 연결용 (asyncpg)
     ALEMBIC_DATABASE_URL: str   # Alembic 마이그레이션용 (psycopg2, 동기)
+    TEST_DATABASE_URL: str | None = None  # 통합 테스트용 (asyncpg). 없으면 DB 테스트 skip
 
     # === External API Keys ===
     YOUTUBE_API_KEY: str
