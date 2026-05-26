@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.schemas import CookingStepOut, VideoSearchOut
 from api.youtube_search import search_videos
 from api.transcript import get_transcript, format_for_gemini
 from api.gemini_parser import parse_cooking_steps
@@ -69,7 +70,7 @@ if DB_ENABLED:
         }
 
 
-@app.get("/api/search")
+@app.get("/api/search", response_model=list[VideoSearchOut])
 async def search(q: str = Query(..., min_length=1)):
     try:
         results = search_videos(q)
@@ -78,7 +79,7 @@ async def search(q: str = Query(..., min_length=1)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/steps")
+@app.get("/api/steps", response_model=list[CookingStepOut])
 async def get_steps(
     videoId: str = Query(...),
     title: str = Query(default="제목 없음"),
