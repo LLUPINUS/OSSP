@@ -21,7 +21,7 @@ export default function CookingSteps() {
             className="p-3 rounded border text-sm border-gray-200"
           >
             <span className="text-gray-400 text-xs mr-2">
-              {step.start_time} ~ {step.end_time}
+              {step.start_time}
             </span>
             {step.action}
           </li>

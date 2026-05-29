@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import httpx
 from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,7 @@ from api.gemini_parser import parse_cooking_steps
 # 팀원 DB 연동 — app/ 디렉토리가 없으면 DB 저장 기능은 비활성화
 try:
     from app.core.database import get_db
-    from api.db_service import get_or_create_recipe, save_cooking_steps
+    from api.db_service import get_or_create_recipe, save_cooking_steps, save_transcript
     DB_ENABLED = True
 except ImportError:
     DB_ENABLED = False
@@ -28,10 +29,28 @@ app.add_middleware(
 )
 
 
-@app.get("/api/search")
-async def search(q: str = Query(..., min_length=1)):
+@app.get("/api/suggest")
+async def suggest(q: str = Query(..., min_length=1)):
     try:
-        results = search_videos(q)
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://suggestqueries.google.com/complete/search",
+                params={"client": "firefox", "q": q, "hl": "ko"},
+                timeout=3.0,
+            )
+            data = resp.json()
+            return data[1]
+    except Exception:
+        return []
+
+
+@app.get("/api/search")
+async def search(
+    q: str = Query(..., min_length=1),
+    pageToken: str = Query(default=None),
+):
+    try:
+        results = search_videos(q, page_token=pageToken)
         return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -57,6 +76,16 @@ async def get_steps(
         from api.gemini_parser import GESTURES
         steps = [s for s in steps if s.get("gesture") in set(GESTURES)]
 
+        # action 문자열 중복 제거 — 먼저 나온 단계만 유지
+        seen: set[str] = set()
+        deduped = []
+        for step in steps:
+            action = step.get("action", "")
+            if action not in seen:
+                seen.add(action)
+                deduped.append(step)
+        steps = deduped
+
         # DB 저장 (DB가 활성화된 경우만)
         if DB_ENABLED and db is not None:
             try:
@@ -65,6 +94,7 @@ async def get_steps(
                     channel_name=channelTitle,
                     thumbnail_url=thumbnail,
                 )
+                await save_transcript(db, recipe.id, transcript)
                 saved = await save_cooking_steps(db, recipe.id, steps)
                 print(f"[main] DB 저장 완료 — recipe_id={recipe.id}, steps={saved}개")
             except Exception as e:

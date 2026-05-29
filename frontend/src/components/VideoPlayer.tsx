@@ -29,6 +29,7 @@ export default function VideoPlayer() {
   // 스텝 정보를 interval 내부에서 최신값으로 읽기 위한 ref
   const stepsRef = useRef(cookingSteps);
   const stepIndexRef = useRef(currentStepIndex);
+  const lastTimeRef = useRef<number>(0);
   useEffect(() => { stepsRef.current = cookingSteps; }, [cookingSteps]);
   useEffect(() => { stepIndexRef.current = currentStepIndex; }, [currentStepIndex]);
 
@@ -42,6 +43,14 @@ export default function VideoPlayer() {
     intervalRef.current = setInterval(() => {
       if (!playerRef.current) return;
       const currentTime: number = playerRef.current.getCurrentTime();
+
+      // 광고 감지: 재생 시간이 이전보다 3초 이상 뒤로 점프하면 광고로 간주하고 건너뜀
+      if (currentTime < lastTimeRef.current - 3) {
+        lastTimeRef.current = currentTime;
+        return;
+      }
+      lastTimeRef.current = currentTime;
+
       const step = stepsRef.current[stepIndexRef.current];
       if (!step) return;
 

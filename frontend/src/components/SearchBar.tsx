@@ -1,31 +1,91 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { VideoSearchResult } from "../types";
 import { useVideoStore } from "../store/useVideoStore";
 
 export default function SearchBar() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<VideoSearchResult[]>([]);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const setSelectedVideo = useVideoStore((s) => s.setSelectedVideo);
   const setCookingSteps = useVideoStore((s) => s.setCookingSteps);
+
+  useEffect(() => {
+    if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    if (!query.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/suggest?q=${encodeURIComponent(query)}`);
+        if (res.ok) setSuggestions(await res.json());
+      } catch {}
+    }, 300);
+    return () => {
+      if (suggestTimer.current) clearTimeout(suggestTimer.current);
+    };
+  }, [query]);
+
+  async function fetchSearch(q: string, token?: string | null) {
+    const url = token
+      ? `/api/search?q=${encodeURIComponent(q)}&pageToken=${token}`
+      : `/api/search?q=${encodeURIComponent(q)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("검색 실패");
+    return res.json() as Promise<{ items: VideoSearchResult[]; nextPageToken: string | null }>;
+  }
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
+    setShowSuggestions(false);
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(
-        `/api/search?q=${encodeURIComponent(query)}`
-      );
-      if (!res.ok) throw new Error("검색 실패");
-      const data: VideoSearchResult[] = await res.json();
-      setResults(data);
-    } catch (err) {
+      const data = await fetchSearch(query);
+      setResults(data.items);
+      setNextPageToken(data.nextPageToken ?? null);
+    } catch {
       setError("영상 검색 중 오류가 발생했습니다.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSuggestionClick(s: string) {
+    setQuery(s);
+    setShowSuggestions(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchSearch(s);
+      setResults(data.items);
+      setNextPageToken(data.nextPageToken ?? null);
+    } catch {
+      setError("영상 검색 중 오류가 발생했습니다.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleLoadMore() {
+    if (!nextPageToken) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchSearch(query, nextPageToken);
+      setResults((prev) => [...prev, ...data.items]);
+      setNextPageToken(data.nextPageToken ?? null);
+    } catch {
+      setError("추가 영상 로드 중 오류가 발생했습니다.");
+    } finally {
+      setLoadingMore(false);
     }
   }
 
@@ -33,6 +93,7 @@ export default function SearchBar() {
     setSelectedVideo(video);
     setCookingSteps([]);
     setError(null);
+    setShowSuggestions(false);
     try {
       const params = new URLSearchParams({
         videoId: video.videoId,
@@ -55,13 +116,30 @@ export default function SearchBar() {
   return (
     <div className="w-full max-w-2xl mx-auto p-4">
       <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="요리 이름 검색 (예: 감자볶음)"
-          className="flex-1 border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => { setQuery(e.target.value); setShowSuggestions(true); }}
+            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            placeholder="요리 이름 검색 (예: 감자볶음)"
+            className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+          {showSuggestions && suggestions.length > 0 && (
+            <ul className="absolute left-0 right-0 top-full mt-1 bg-white border rounded shadow-lg z-10">
+              {suggestions.map((s, i) => (
+                <li
+                  key={i}
+                  onMouseDown={() => handleSuggestionClick(s)}
+                  className="px-3 py-2 text-sm cursor-pointer hover:bg-gray-100"
+                >
+                  {s}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
         <button
           type="submit"
           disabled={loading}
@@ -88,6 +166,16 @@ export default function SearchBar() {
           </li>
         ))}
       </ul>
+
+      {nextPageToken && (
+        <button
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+          className="mt-3 w-full py-2 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
+        >
+          {loadingMore ? "불러오는 중..." : "더 보기"}
+        </button>
+      )}
     </div>
   );
 }

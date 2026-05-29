@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useState } from "react";
 import { useVideoStore } from "../store/useVideoStore";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -27,6 +27,7 @@ async function detectAction(
 
 export default function CameraFeed() {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   const cookingSteps = useVideoStore((s) => s.cookingSteps);
   const currentStepIndex = useVideoStore((s) => s.currentStepIndex);
@@ -38,11 +39,15 @@ export default function CameraFeed() {
     let stream: MediaStream | null = null;
 
     async function startCamera() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraError("이 브라우저는 카메라를 지원하지 않습니다.");
+        return;
+      }
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
         if (videoRef.current) videoRef.current.srcObject = stream;
-      } catch {
-        console.error("카메라 접근 실패");
+      } catch (e) {
+        setCameraError(`카메라 오류: ${e instanceof Error ? e.message : String(e)}`);
       }
     }
 
@@ -78,11 +83,14 @@ export default function CameraFeed() {
         playsInline
         className="w-64 h-48 rounded border bg-black object-cover"
       />
-      <p className="text-xs text-gray-500">
-        {playerStatus === "paused" && currentStep
-          ? `인식 대기 중: ${currentStep.action}`
-          : "카메라 대기 중"}
-      </p>
+      {cameraError
+        ? <p className="text-xs text-red-500">{cameraError}</p>
+        : <p className="text-xs text-gray-500">
+            {playerStatus === "paused" && currentStep
+              ? `인식 대기 중: ${currentStep.action}`
+              : "카메라 대기 중"}
+          </p>
+      }
     </div>
   );
 }

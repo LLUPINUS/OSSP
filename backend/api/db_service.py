@@ -4,6 +4,7 @@ from sqlalchemy import select, delete
 from app.models.recipe import Recipe, ProcessingStatus
 from app.models.cooking_step import CookingStep
 from app.models.action_label import ActionLabel
+from app.models.transcript import Transcript
 
 
 def _mm_ss_to_seconds(t: str) -> float:
@@ -45,6 +46,26 @@ async def _resolve_action_label_id(session: AsyncSession, gesture_ko: str) -> in
     return label.id if label else None
 
 
+async def save_transcript(
+    session: AsyncSession,
+    recipe_id: int,
+    transcript: list[dict],
+) -> int:
+    """원본 자막 전체를 transcripts 테이블에 저장한다. 재호출 시 기존 데이터를 덮어쓴다."""
+    await session.execute(
+        delete(Transcript).where(Transcript.recipe_id == recipe_id)
+    )
+    for entry in transcript:
+        session.add(Transcript(
+            recipe_id=recipe_id,
+            start_time=float(entry["start"]),
+            duration=float(entry["duration"]),
+            text=entry["text"],
+        ))
+    await session.commit()
+    return len(transcript)
+
+
 async def save_cooking_steps(
     session: AsyncSession,
     recipe_id: int,
@@ -54,6 +75,16 @@ async def save_cooking_steps(
     await session.execute(
         delete(CookingStep).where(CookingStep.recipe_id == recipe_id)
     )
+
+    # action 문자열 기준 중복 제거 — 먼저 나온 단계만 유지
+    seen: set[str] = set()
+    deduped = []
+    for step in steps:
+        action = step.get("action", "")
+        if action not in seen:
+            seen.add(action)
+            deduped.append(step)
+    steps = deduped
 
     saved = 0
     for order, step in enumerate(steps, start=1):
