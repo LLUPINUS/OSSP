@@ -10,10 +10,10 @@ export interface VideoSearchResult {
   title: string;
   thumbnail: string;
   channelTitle: string;
-  // 아래는 백엔드 /api/search가 아직 제공하지 않음(README 4.2 — videos.list 2차 호출 필요).
-  // UI에서는 있으면 표시, 없으면 생략/placeholder 처리.
+  // 백엔드 /api/search가 videos.list 2차 호출로 제공(없으면 null → 생략).
+  // UI에서는 있으면 표시, 없으면 생략.
   duration?: string; // "12:34"
-  viewCount?: string; // "1,234만회"
+  viewCount?: string; // "1.2만회"
 }
 
 export type PlayerStatus = "idle" | "playing" | "paused";
