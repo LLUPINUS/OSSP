@@ -1,3 +1,23 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-white text-ink font-sans antialiased;
+    /* 한글 줄바꿈 최적화 (README 3. 디자인 시스템 권장) */
+    word-break: keep-all;
+    text-wrap: pretty;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  #root {
+    height: 100%;
+  }
+}
