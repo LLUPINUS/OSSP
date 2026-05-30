@@ -35,10 +35,7 @@ export default function ProcessingScreen() {
   const [runKey, setRunKey] = useState(0);
 
   useEffect(() => {
-    if (!video) {
-      setStatus("error");
-      return;
-    }
+    if (!video) return; // 가드는 렌더 시점에서 처리(아래 early return)
 
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -103,7 +100,7 @@ export default function ProcessingScreen() {
     };
   }, [video, runKey]);
 
-  if (status === "error") {
+  if (status === "error" || !video) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3.5 px-9 pb-6 text-center">
         <div className="text-[21px] font-extrabold tracking-[-0.025em] text-ink">

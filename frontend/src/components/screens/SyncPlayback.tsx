@@ -48,12 +48,12 @@ export default function SyncPlayback() {
   const camVideoRef = useRef<HTMLVideoElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const gateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [duration, setDuration] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
-  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // interval/timer에서 최신값 읽기용 ref
   const stepsRef = useRef(cookingSteps);
@@ -69,39 +69,127 @@ export default function SyncPlayback() {
     playingRef.current = playing;
   }, [playing]);
 
-  // ── 컨트롤 자동 숨김 (재생 중 3초 비활동 시) ──
-  function scheduleHide() {
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
-  }
-  function revealControls() {
-    setControlsVisible(true);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    if (playingRef.current) scheduleHide();
-  }
-  // 재생 시작 시 곧 숨기고, 정지/분석 중엔 계속 표시
-  useEffect(() => {
-    setControlsVisible(true);
-    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
-    if (playing) scheduleHide();
-  }, [playing]);
-
-  const isLast = currentStepIndex >= cookingSteps.length - 1;
-
+  // ── 타이머/컨트롤 헬퍼 ──
   function clearGate() {
     if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
     gateTimerRef.current = null;
   }
+  function clearHideTimer() {
+    if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+    hideTimerRef.current = null;
+  }
+  function scheduleHide() {
+    clearHideTimer();
+    hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
+  }
+  // 탭/조작 시: 컨트롤 표시 (재생 중이면 3초 후 자동 숨김)
+  function revealControls() {
+    setControlsVisible(true);
+    if (playingRef.current) scheduleHide();
+    else clearHideTimer();
+  }
+  // 재생 시작 직후: 잠깐 표시 후 자동 숨김
+  function showThenHide() {
+    setControlsVisible(true);
+    scheduleHide();
+  }
+  // 일시정지/분석 중: 컨트롤 유지 (표시는 !playing이 보장, 자동 숨김만 취소)
+  function holdControls() {
+    setControlsVisible(true);
+    clearHideTimer();
+  }
 
-  // ── 공유 카메라 스트림 attach + 언마운트 시 게이트 타이머 정리 ──
+  function advanceToNext() {
+    clearGate();
+    const steps = stepsRef.current;
+    const next = idxRef.current + 1;
+    if (next >= steps.length) return;
+    setCurrentStepIndex(next);
+    const p = playerRef.current;
+    p?.seekTo(timeToSec(steps[next].start_time), true);
+    p?.playVideo();
+    setPlaying(true);
+    setAiGateState("waiting");
+    showThenHide();
+  }
+
+  // 단계 끝 도달 → 일시정지 후 인식 사이클
+  function triggerGate() {
+    const p = playerRef.current;
+    if (!p) return;
+    p.pauseVideo();
+    setPlaying(false); // 폴링 정지
+    holdControls();
+    setAiGateState("analyzing");
+
+    // ───────────────────────────────────────────────────────────────
+    // [CV 연동 지점] 아래 타이머는 시뮬레이션이다.
+    // 실제 구현은 여기서 카메라 프레임을 캡처해(canvas.toBlob) 1~2초 간격으로
+    // POST /recognize {stepId, frame} 호출 → "동작 맞음" 응답 시 recognized로.
+    // (UI 상태 전환 로직은 그대로 재사용 — README 6)
+    // ───────────────────────────────────────────────────────────────
+    clearGate();
+    gateTimerRef.current = setTimeout(() => {
+      setAiGateState("recognized");
+      gateTimerRef.current = setTimeout(advanceToNext, SIM_RECOGNIZED);
+    }, SIM_ANALYZE);
+  }
+
+  function goStep(i: number) {
+    clearGate();
+    const steps = stepsRef.current;
+    const clamped = Math.max(0, Math.min(steps.length - 1, i));
+    setCurrentStepIndex(clamped);
+    const p = playerRef.current;
+    p?.seekTo(timeToSec(steps[clamped].start_time), true);
+    p?.playVideo();
+    setPlaying(true);
+    setAiGateState("waiting");
+    showThenHide();
+  }
+
+  function togglePlay() {
+    const p = playerRef.current;
+    if (!p) return;
+    if (playing) {
+      p.pauseVideo();
+      setPlaying(false);
+      clearGate();
+      setAiGateState("waiting");
+      holdControls();
+    } else {
+      p.playVideo();
+      setPlaying(true);
+      setAiGateState("waiting");
+      showThenHide();
+    }
+  }
+
+  function handleExit() {
+    clearGate();
+    clearHideTimer();
+    stopCamera();
+    goHome();
+  }
+
+  const onReady = (e: YouTubeEvent) => {
+    playerRef.current = e.target;
+    setDuration(e.target.getDuration?.() ?? 0);
+    const steps = stepsRef.current;
+    const step = steps[idxRef.current];
+    if (step) e.target.seekTo(timeToSec(step.start_time), true);
+    // 첫 재생은 사용자 탭으로(자동재생 제한) → 정지 상태로 시작
+    setAiGateState("waiting");
+  };
+
+  // ── 공유 카메라 스트림 attach + 언마운트 시 타이머 정리 ──
   useEffect(() => {
     const s = getStream();
     if (s && camVideoRef.current) camVideoRef.current.srcObject = s;
     return () => {
-      clearGate();
+      if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 단계가 바뀌면 현재 항목을 리스트 맨 위로 스크롤 ──
@@ -138,87 +226,6 @@ export default function SyncPlayback() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
-  // 단계 끝 도달 → 일시정지 후 인식 사이클
-  function triggerGate() {
-    const p = playerRef.current;
-    if (!p) return;
-    p.pauseVideo();
-    setPlaying(false); // 폴링 정지
-    setAiGateState("analyzing");
-
-    // ───────────────────────────────────────────────────────────────
-    // [CV 연동 지점] 아래 타이머는 시뮬레이션이다.
-    // 실제 구현은 여기서 카메라 프레임을 캡처해(canvas.toBlob) 1~2초 간격으로
-    // POST /recognize {stepId, frame} 호출 → "동작 맞음" 응답 시 recognized로.
-    // (UI 상태 전환 로직은 그대로 재사용 — README 6)
-    // ───────────────────────────────────────────────────────────────
-    clearGate();
-    gateTimerRef.current = setTimeout(() => {
-      setAiGateState("recognized");
-      gateTimerRef.current = setTimeout(() => {
-        advanceToNext();
-      }, SIM_RECOGNIZED);
-    }, SIM_ANALYZE);
-  }
-
-  function advanceToNext() {
-    clearGate();
-    const steps = stepsRef.current;
-    const next = idxRef.current + 1;
-    if (next >= steps.length) return;
-    setCurrentStepIndex(next);
-    const p = playerRef.current;
-    p?.seekTo(timeToSec(steps[next].start_time), true);
-    p?.playVideo();
-    setPlaying(true);
-    setAiGateState("waiting");
-  }
-
-  function goStep(i: number) {
-    clearGate();
-    revealControls();
-    const steps = stepsRef.current;
-    const clamped = Math.max(0, Math.min(steps.length - 1, i));
-    setCurrentStepIndex(clamped);
-    const p = playerRef.current;
-    p?.seekTo(timeToSec(steps[clamped].start_time), true);
-    p?.playVideo();
-    setPlaying(true);
-    setAiGateState("waiting");
-  }
-
-  function togglePlay() {
-    const p = playerRef.current;
-    if (!p) return;
-    revealControls();
-    if (playing) {
-      p.pauseVideo();
-      setPlaying(false);
-      clearGate();
-      setAiGateState("waiting");
-    } else {
-      p.playVideo();
-      setPlaying(true);
-      setAiGateState("waiting");
-    }
-  }
-
-  function handleExit() {
-    clearGate();
-    stopCamera();
-    goHome();
-  }
-
-  const onReady = (e: YouTubeEvent) => {
-    playerRef.current = e.target;
-    setDuration(e.target.getDuration?.() ?? 0);
-    const steps = stepsRef.current;
-    const step = steps[idxRef.current];
-    if (step) e.target.seekTo(timeToSec(step.start_time), true);
-    // 첫 재생은 사용자 탭으로(자동재생 제한) → 정지 상태로 시작
-    setAiGateState("waiting");
-  };
-
   // 안전 가드 (정상 흐름에선 steps>0 보장)
   if (!selectedVideo || cookingSteps.length === 0) {
     return (
@@ -235,6 +242,7 @@ export default function SyncPlayback() {
   }
 
   const cur = cookingSteps[currentStepIndex];
+  const isLast = currentStepIndex >= cookingSteps.length - 1;
   const progress = duration ? Math.min(100, (elapsed / duration) * 100) : 0;
   // 정지/분석 중엔 항상 표시, 재생 중엔 자동 숨김 대상
   const showControls = controlsVisible || !playing;
