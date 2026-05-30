@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum as PyEnum
-from sqlalchemy import String, Integer, DateTime, Enum, func
+from sqlalchemy import String, DateTime, Enum, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from typing import TYPE_CHECKING
 
@@ -27,9 +27,7 @@ class Recipe(Base):
     )
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     channel_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    duration_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
     thumbnail_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
-    language: Mapped[str | None] = mapped_column(String(10), nullable=True)
     processing_status: Mapped[ProcessingStatus] = mapped_column(
         Enum(ProcessingStatus, name="processing_status_enum"),
         nullable=False,
