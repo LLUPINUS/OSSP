@@ -157,6 +157,14 @@ export function CheckIcon({ className }: IconProps) {
   );
 }
 
+export function PlayIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <polygon points="7 4 20 12 7 20" />
+    </svg>
+  );
+}
+
 export function ViewfinderIcon({ className }: IconProps) {
   return (
     <svg
