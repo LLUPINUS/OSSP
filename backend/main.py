@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.schemas import CookingStepOut, VideoSearchOut
 from api.youtube_search import search_videos
 from api.transcript import get_transcript, format_for_gemini
-from api.gemini_parser import parse_cooking_steps
+from api.gemini_parser import parse_cooking_steps, GeminiParseError
 
 # 팀원 DB 연동 — app/ 디렉토리가 없으면 DB 저장 기능은 비활성화
 try:
@@ -103,7 +103,15 @@ async def get_steps(
     if not transcript:
         raise HTTPException(status_code=404, detail="자막을 찾을 수 없습니다.")
 
-    steps = parse_cooking_steps(format_for_gemini(transcript))
+    try:
+        steps = parse_cooking_steps(format_for_gemini(transcript))
+    except GeminiParseError as e:
+        # AI 분석 실패는 캐시에 남기지 않는다(recipe 생성 전이라 오염 없음). 다음 요청 때 재시도된다. (이슈 #5)
+        print(f"[main] Gemini 분석 실패: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail="AI 분석에 일시적으로 실패했습니다. 잠시 후 다시 시도해주세요.",
+        ) from e
 
     # 허용된 제스처에 해당하는 단계만 유지
     from api.gemini_parser import GESTURES

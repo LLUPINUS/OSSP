@@ -26,6 +26,10 @@ GESTURES: list[str] = [
 ]
 
 
+class GeminiParseError(Exception):
+    """Gemini 호출/파싱 실패. '정상적으로 0건 추출'과 구분하기 위한 예외 (이슈 #5)."""
+
+
 def parse_cooking_steps(transcript_text: str) -> list[dict]:
     tools_str = ", ".join(TOOLS) if TOOLS else "미확정 (제스처 기준으로만 필터링)"
     gestures_str = ", ".join(GESTURES)
@@ -62,10 +66,12 @@ def parse_cooking_steps(transcript_text: str) -> list[dict]:
             ),
         )
         steps = json.loads(response.text)
-        return steps if isinstance(steps, list) else []
     except json.JSONDecodeError as e:
-        print(f"[gemini_parser] JSON 파싱 오류: {e}")
-        return []
+        # 예외를 []로 삼키면 '정상 0건'과 구분이 안 돼 캐시가 오염된다(이슈 #5). 위로 전파한다.
+        raise GeminiParseError(f"Gemini 응답 JSON 파싱 실패: {e}") from e
     except Exception as e:
-        print(f"[gemini_parser] 오류: {e}")
-        return []
+        raise GeminiParseError(f"Gemini 호출 실패: {e}") from e
+
+    if not isinstance(steps, list):
+        raise GeminiParseError(f"Gemini가 리스트가 아닌 응답을 반환했습니다: {type(steps).__name__}")
+    return steps
