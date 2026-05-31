@@ -78,13 +78,13 @@ pgAdmin4 또는 psql에서 다음 명령으로 DB 생성:
 CREATE DATABASE cooksync;
 ```
 
-### 6. 마이그레이션 적용 (Alembic 세팅 후)
+### 6. 마이그레이션 적용
 
 ```bash
 alembic upgrade head
 ```
 
-> 처음 세팅 시점에는 아직 Alembic이 초기화되지 않았을 수 있습니다. 초기화는 별도 작업으로 진행 예정입니다.
+이 한 번으로 4개 테이블(`recipes`·`transcripts`·`action_labels`·`cooking_steps`)이 생성되고, 행동 라벨 시드 데이터(썰기·굽기·볶기·젓기)까지 자동으로 적용됩니다.
 
 ### 7. 개발 서버 실행
 
