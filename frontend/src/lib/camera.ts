@@ -21,8 +21,10 @@ export async function startCamera(mode: Facing = facing): Promise<MediaStream> {
   stream = await navigator.mediaDevices.getUserMedia({
     video: {
       facingMode: { ideal: mode },
-      width: { ideal: 640 }, // 모바일 성능 고려 해상도 제한(README 6)
-      height: { ideal: 480 },
+      // 미리보기 화질 위해 720p 요청. 정지 구간 단발 추론이라 스트림 부담이 거의 없고,
+      // CV로 보낼 프레임은 캡처 시 다운스케일하면 된다(README 6).
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
     },
     audio: false,
   });

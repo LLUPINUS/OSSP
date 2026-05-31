@@ -6,7 +6,8 @@ import YouTube, {
 } from "react-youtube";
 import { useVideoStore } from "../../store/useVideoStore";
 import { getStream, stopCamera } from "../../lib/camera";
-import { CameraIcon, CheckIcon, PlayIcon } from "../icons";
+import { enterLandscape, exitLandscape } from "../../lib/orientation";
+import { CheckIcon, PlayIcon } from "../icons";
 
 const OPTS: YouTubeProps["opts"] = {
   width: "100%",
@@ -88,6 +89,16 @@ export default function SyncPlayback() {
     if (playingRef.current) scheduleHide();
     else clearHideTimer();
   }
+  // 영상 탭: 유튜브처럼 컨트롤을 토글한다. 재생 중 표시 상태면 즉시 숨기고,
+  // 그 외(숨김 상태/정지)에는 표시한다. (정지 상태는 showControls가 항상 표시로 강제)
+  function toggleControls() {
+    if (playingRef.current && controlsVisible) {
+      setControlsVisible(false);
+      clearHideTimer();
+    } else {
+      revealControls();
+    }
+  }
   // 재생 시작 직후: 잠깐 표시 후 자동 숨김
   function showThenHide() {
     setControlsVisible(true);
@@ -158,6 +169,7 @@ export default function SyncPlayback() {
       setAiGateState("waiting");
       holdControls();
     } else {
+      void enterLandscape(); // 첫 재생 탭(제스처) 시 가로 고정 시도
       p.playVideo();
       setPlaying(true);
       setAiGateState("waiting");
@@ -168,6 +180,7 @@ export default function SyncPlayback() {
   function handleExit() {
     clearGate();
     clearHideTimer();
+    exitLandscape();
     stopCamera();
     goHome();
   }
@@ -182,14 +195,24 @@ export default function SyncPlayback() {
     setAiGateState("waiting");
   };
 
-  // ── 공유 카메라 스트림 attach + 언마운트 시 타이머 정리 ──
+  // ── 공유 카메라 스트림 attach + 가로 고정 + 언마운트 정리 ──
   useEffect(() => {
     const s = getStream();
     if (s && camVideoRef.current) camVideoRef.current.srcObject = s;
+    // 진입 시 가로 고정 시도(직전 제스처의 transient activation이 남아있으면 성공,
+    // 아니면 첫 재생 탭에서 재시도된다).
+    void enterLandscape();
+    // 데스크탑: 마우스를 움직이면 컨트롤 표시, 멈추면 3초 뒤 자동 숨김(유튜브식).
+    // 모바일엔 mousemove가 없어 영향 없음(탭 토글로 제어).
+    const onMove = () => revealControls();
+    window.addEventListener("mousemove", onMove);
     return () => {
+      window.removeEventListener("mousemove", onMove);
       if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      exitLandscape();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── 단계가 바뀌면 현재 항목을 리스트 맨 위로 스크롤 ──
@@ -248,7 +271,7 @@ export default function SyncPlayback() {
   const showControls = controlsVisible || !playing;
 
   return (
-    <div className="fixed inset-0 z-50 grid grid-cols-[1fr_300px] grid-rows-1 bg-black max-[680px]:grid-cols-[1fr_240px]">
+    <div className="fixed inset-0 z-50 grid grid-cols-[1fr_210px] grid-rows-1 bg-black max-[680px]:grid-cols-[1fr_172px]">
       {/* ── LEFT: YouTube ── */}
       <div className="relative overflow-hidden bg-[radial-gradient(130%_100%_at_50%_38%,#26262a,#101012_75%)]">
         <YouTube
@@ -263,8 +286,8 @@ export default function SyncPlayback() {
           iframeClassName="absolute inset-0 h-full w-full"
         />
 
-        {/* 영상 탭 레이어: 탭하면 컨트롤을 다시 띄움 (iframe 위에서 클릭 캡처) */}
-        <div className="absolute inset-0 z-[2]" onClick={revealControls} />
+        {/* 영상 탭 레이어: 탭하면 컨트롤 토글 (iframe 위에서 클릭 캡처) */}
+        <div className="absolute inset-0 z-[2]" onClick={toggleControls} />
 
         {/* 중앙 재생/일시정지 오버레이 (정지 시 노출) */}
         {!playing && (
@@ -337,10 +360,8 @@ export default function SyncPlayback() {
         </div>
       </div>
 
-      {/* ── RIGHT: steps(top) / camera(bottom) ── */}
-      <div className="grid min-h-0 grid-rows-[1fr_150px] border-l border-white/[0.07] bg-[#0e0e10]">
-        {/* steps 패널 (흰색) */}
-        <div className="flex min-h-0 flex-col bg-white px-[18px] py-4">
+      {/* ── RIGHT: steps 전용 (카메라 프리뷰는 화면에 표시하지 않음) ── */}
+      <div className="flex min-h-0 flex-col border-l border-white/[0.07] bg-white px-[18px] py-4">
           <div className="flex shrink-0 items-center justify-between">
             <span className="text-[11px] font-bold tracking-[0.06em] text-ink-3">
               요리 단계
@@ -417,33 +438,11 @@ export default function SyncPlayback() {
               );
             })}
           </div>
-        </div>
 
-        {/* 카메라 영역 (다크) */}
-        <div className="relative overflow-hidden border-t border-white/[0.07] bg-[radial-gradient(120%_110%_at_50%_35%,#2a2a2e,#121214_80%)]">
-          <video
-            ref={camVideoRef}
-            autoPlay
-            muted
-            playsInline
-            className="absolute inset-0 h-full w-full object-cover"
-          />
-          <span className="absolute left-[11px] top-[9px] z-[2] flex items-center gap-[5px] rounded-[11px] bg-black/45 px-2 py-1 text-[10px] font-bold text-white">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#ff3b30]" />
-            REC
-          </span>
-          {!getStream() && (
-            <div className="absolute left-1/2 top-1/2 z-[1] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1.5 text-white/[0.22]">
-              <CameraIcon className="h-[22px] w-[22px]" />
-              <span className="whitespace-nowrap text-[10.5px] font-semibold">
-                카메라 영역
-              </span>
-            </div>
-          )}
-          <span className="absolute bottom-[9px] right-[11px] z-[2] flex items-center gap-[5px] rounded-[11px] bg-black/45 px-2 py-1 text-[10px] font-bold text-[#7ee0a0]">
-            ● 동기화됨
-          </span>
-        </div>
+          {/* 카메라 프리뷰는 화면에 표시하지 않는다. 단, 스트림(트랙)은 계속 살려둬야
+              브라우저가 카메라를 끄지 않으므로 video는 sr-only로 렌더만 유지한다
+              (display:none이 아님 → 화면에서만 숨김, 추후 CV 프레임 캡처 소스로 사용). */}
+          <video ref={camVideoRef} autoPlay muted playsInline className="sr-only" />
       </div>
     </div>
   );

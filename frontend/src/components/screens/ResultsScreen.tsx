@@ -36,7 +36,7 @@ export default function ResultsScreen() {
   }
 
   return (
-    <div className="flex flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       {/* 상단 네비 */}
       <div className="flex shrink-0 items-center gap-2 border-b border-line px-3.5 pb-3 pt-1">
         <button
@@ -49,7 +49,7 @@ export default function ResultsScreen() {
         <form
           onSubmit={handleSubmit}
           autoComplete="off"
-          className="flex h-[42px] flex-1 items-center gap-2.5 rounded-[21px] bg-fill px-4"
+          className="flex h-[42px] min-w-0 flex-1 items-center gap-2.5 rounded-[21px] bg-fill px-4"
         >
           <SearchIcon className="h-[18px] w-[18px] shrink-0 text-ink-3" />
           <input
@@ -63,8 +63,8 @@ export default function ResultsScreen() {
             <button
               type="button"
               onClick={handleClear}
-              aria-label="지우기"
-              className="flex h-6 w-6 shrink-0 items-center justify-center p-[3px] text-ink-3"
+              aria-label="검색어 지우기"
+              className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-ink/[0.07] p-[6px] text-ink-2 transition-colors active:bg-ink/15"
             >
               <XIcon className="h-full w-full" />
             </button>
@@ -85,7 +85,7 @@ export default function ResultsScreen() {
       )}
 
       {/* 리스트 영역 */}
-      <div className="flex-1 overflow-y-auto px-5 pb-7 pt-0.5">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-7 pt-0.5">
         {searchStatus === "loading" && <ResultsSkeleton />}
         {searchStatus === "empty" && <ResultsEmpty query={searchQuery} />}
         {searchStatus === "error" && <ResultsError />}
