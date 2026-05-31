@@ -11,7 +11,7 @@ function App() {
   return (
     // 데스크탑에선 모바일 폭으로 중앙 정렬, 모바일에선 풀블리드
     <div className="flex min-h-[100dvh] w-full justify-center bg-[#e9e8e6]">
-      <div className="relative flex min-h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden bg-white">
+      <div className="relative flex h-[100dvh] w-full max-w-[480px] flex-col overflow-hidden bg-white">
         {phase === "home" && <HomeScreen />}
         {phase === "results" && <ResultsScreen />}
         {phase === "camera" && <CameraGuide />}

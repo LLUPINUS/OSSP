@@ -6,13 +6,7 @@ import {
   startCamera,
   stopCamera,
 } from "../../lib/camera";
-import {
-  BackIcon,
-  CameraIcon,
-  CameraOffIcon,
-  FlipCameraIcon,
-  ViewfinderIcon,
-} from "../icons";
+import { BackIcon, CameraIcon, CameraOffIcon, FlipCameraIcon } from "../icons";
 
 type Gate = "request" | "denied" | "granted";
 
@@ -105,24 +99,15 @@ export default function CameraGuide() {
       <button
         onClick={handleBack}
         aria-label="뒤로"
-        className="absolute left-4 top-16 z-[4] flex h-10 w-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm transition-colors active:bg-black/50"
+        className="absolute left-4 top-4 z-[4] flex h-10 w-10 items-center justify-center rounded-full bg-black/30 backdrop-blur-sm transition-colors active:bg-black/50"
       >
         <BackIcon className="h-[22px] w-[22px]" />
       </button>
 
-      {/* 거치 가이드 프레임 */}
-      <div className="pointer-events-none absolute inset-x-[18px] bottom-[150px] top-[110px] rounded-[18px] border-[1.5px] border-dashed border-white/55">
-        <span className="absolute -left-0.5 -top-0.5 h-6 w-6 rounded-tl-[18px] border-l-[3px] border-t-[3px] border-white" />
-        <span className="absolute -right-0.5 -top-0.5 h-6 w-6 rounded-tr-[18px] border-r-[3px] border-t-[3px] border-white" />
-        <span className="absolute -bottom-0.5 -left-0.5 h-6 w-6 rounded-bl-[18px] border-b-[3px] border-l-[3px] border-white" />
-        <span className="absolute -bottom-0.5 -right-0.5 h-6 w-6 rounded-br-[18px] border-b-[3px] border-r-[3px] border-white" />
-      </div>
-
       {/* 하단 안내 + 컨트롤 */}
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/[0.84] via-black/50 to-transparent px-[22px] pb-7 pt-[34px]">
-        <div className="mb-5 flex items-center justify-center gap-2 text-center text-[14.5px] font-semibold tracking-[-0.01em]">
-          <ViewfinderIcon className="h-[18px] w-[18px] shrink-0 opacity-85" />
-          화구와 조리대를 이 영역에 맞춰주세요
+        <div className="mb-5 text-center text-[14.5px] font-semibold tracking-[-0.01em]">
+          화구와 조리대가 잘 나오는지 확인해주세요
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -173,13 +158,14 @@ export default function CameraGuide() {
                   카메라 권한이 차단됐어요
                 </div>
                 <div className="mt-2.5 text-[13px] font-medium leading-relaxed tracking-[-0.01em] text-ink-3">
-                  CookSync를 사용하려면 카메라 권한이 필요해요
+                  한 번 차단하면 버튼으로는 다시 물어볼 수 없어요. 주소창의 사이트
+                  설정에서 카메라를 ‘허용’으로 바꾼 뒤 새로고침해 주세요.
                 </div>
                 <button
-                  onClick={handleAllow}
+                  onClick={() => window.location.reload()}
                   className="mt-5 h-[50px] w-full rounded-[14px] bg-ink text-[15px] font-bold tracking-[-0.01em] text-white transition-transform active:scale-[0.98]"
                 >
-                  다시 시도
+                  새로고침하고 다시 시도
                 </button>
               </>
             )}
