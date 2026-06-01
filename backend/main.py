@@ -1,6 +1,8 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import json
+
 import httpx
 from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,8 +73,10 @@ if DB_ENABLED:
         }
 
 
-@app.get("/api/suggest")
+@app.get("/api/suggest", response_model=list[str])
 async def suggest(q: str = Query(..., min_length=1)):
+    """검색어 자동완성. Google suggestqueries(비공식)를 프록시해 추천어 목록만 반환한다.
+    실패 시 빈 배열 — 자동완성은 부가 기능이라 검색 자체를 막지 않는다."""
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.get(
@@ -80,7 +84,9 @@ async def suggest(q: str = Query(..., min_length=1)):
                 params={"client": "firefox", "q": q, "hl": "ko"},
                 timeout=3.0,
             )
-            data = resp.json()
+            # Google은 hl=ko일 때 EUC-KR로 응답하므로 resp.json()(UTF-8 가정)은 한글에서 깨진다.
+            # charset 헤더를 반영해 디코딩된 resp.text를 직접 파싱한다.
+            data = json.loads(resp.text)
             return data[1]
     except Exception:
         return []
@@ -133,14 +139,15 @@ async def get_steps(
     from api.gemini_parser import GESTURES
     steps = [s for s in steps if s.get("gesture") in set(GESTURES)]
 
-    # action 문자열 중복 제거 — 먼저 나온 단계만 유지
-    seen: set[str] = set()
-    deduped = []
+    # 인접 중복 제거 — 직전 단계와 action이 같을 때만 건너뛴다.
+    # Gemini가 같은 단계를 연속으로 중복 출력하는 경우만 제거하고,
+    # 영상에서 실제로 떨어져 두 번 나오는 반복 단계는 보존한다.
+    deduped: list[dict] = []
     for step in steps:
         action = step.get("action", "")
-        if action not in seen:
-            seen.add(action)
-            deduped.append(step)
+        if deduped and deduped[-1].get("action", "") == action:
+            continue
+        deduped.append(step)
     steps = deduped
 
     # 3. DB 저장 (best-effort: 실패해도 steps는 반환)
