@@ -1,10 +1,17 @@
 import { useState } from "react";
 import { runSearch } from "../../lib/search";
+import { useSuggest } from "../../hooks/useSuggest";
+import SuggestList from "../SuggestList";
 import { ArrowRightIcon, SearchIcon } from "../icons";
 
 export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const hasText = query.trim().length > 0;
+  const { suggestions, open, highlight, onInputKeyDown, select, close, setHighlight } =
+    useSuggest(query, (value) => {
+      setQuery(value);
+      runSearch(value);
+    });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -28,32 +35,45 @@ export default function HomeScreen() {
         </div>
 
         <div className="mt-[34px]">
-          <form
-            onSubmit={handleSubmit}
-            autoComplete="off"
-            className={`group flex h-[60px] items-center gap-3 rounded-[18px] border-[1.5px] px-[18px] transition-all duration-150 focus-within:border-accent focus-within:bg-white focus-within:shadow-[0_6px_22px_-8px_rgba(255,90,44,0.5)] ${
-              hasText ? "border-ink bg-fill" : "border-transparent bg-fill"
-            }`}
-          >
-            <SearchIcon className="h-[22px] w-[22px] shrink-0 text-ink-3 transition-colors group-focus-within:text-accent-ink" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="요리 검색 · 예: 김치찌개"
-              enterKeyHint="search"
-              className="min-w-0 flex-1 bg-transparent text-[16.5px] font-medium tracking-[-0.01em] text-ink outline-none placeholder:font-medium placeholder:text-ink-3"
-            />
-            <button
-              type="submit"
-              aria-label="검색"
-              className={`h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-ink text-white transition-transform active:scale-90 ${
-                hasText ? "flex" : "hidden"
+          <div className="relative">
+            <form
+              onSubmit={handleSubmit}
+              autoComplete="off"
+              className={`group flex h-[60px] items-center gap-3 rounded-[18px] border-[1.5px] px-[18px] transition-all duration-150 focus-within:border-accent focus-within:bg-white focus-within:shadow-[0_6px_22px_-8px_rgba(255,90,44,0.5)] ${
+                hasText ? "border-ink bg-fill" : "border-transparent bg-fill"
               }`}
             >
-              <ArrowRightIcon className="h-[18px] w-[18px]" />
-            </button>
-          </form>
+              <SearchIcon className="h-[22px] w-[22px] shrink-0 text-ink-3 transition-colors group-focus-within:text-accent-ink" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={onInputKeyDown}
+                onBlur={close}
+                placeholder="요리 검색 · 예: 김치찌개"
+                enterKeyHint="search"
+                className="min-w-0 flex-1 bg-transparent text-[16.5px] font-medium tracking-[-0.01em] text-ink outline-none placeholder:font-medium placeholder:text-ink-3"
+              />
+              <button
+                type="submit"
+                aria-label="검색"
+                className={`h-[38px] w-[38px] shrink-0 items-center justify-center rounded-xl bg-ink text-white transition-transform active:scale-90 ${
+                  hasText ? "flex" : "hidden"
+                }`}
+              >
+                <ArrowRightIcon className="h-[18px] w-[18px]" />
+              </button>
+            </form>
+            {open && (
+              <SuggestList
+                items={suggestions}
+                highlight={highlight}
+                onSelect={select}
+                onHover={setHighlight}
+                className="absolute left-0 right-0 top-[calc(100%+8px)] z-30"
+              />
+            )}
+          </div>
           <div className="mt-4 px-1.5 text-center text-[13px] leading-relaxed tracking-[-0.01em] text-ink-3">
             영상을 선택하면 요리 단계를
             <br />
