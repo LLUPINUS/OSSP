@@ -1,6 +1,7 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+import httpx
 from fastapi import FastAPI, Query, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
@@ -70,6 +71,21 @@ if DB_ENABLED:
         }
 
 
+@app.get("/api/suggest")
+async def suggest(q: str = Query(..., min_length=1)):
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://suggestqueries.google.com/complete/search",
+                params={"client": "firefox", "q": q, "hl": "ko"},
+                timeout=3.0,
+            )
+            data = resp.json()
+            return data[1]
+    except Exception:
+        return []
+
+
 @app.get("/api/search", response_model=list[VideoSearchOut])
 async def search(q: str = Query(..., min_length=1)):
     try:
@@ -116,6 +132,16 @@ async def get_steps(
     # 허용된 제스처에 해당하는 단계만 유지
     from api.gemini_parser import GESTURES
     steps = [s for s in steps if s.get("gesture") in set(GESTURES)]
+
+    # action 문자열 중복 제거 — 먼저 나온 단계만 유지
+    seen: set[str] = set()
+    deduped = []
+    for step in steps:
+        action = step.get("action", "")
+        if action not in seen:
+            seen.add(action)
+            deduped.append(step)
+    steps = deduped
 
     # 3. DB 저장 (best-effort: 실패해도 steps는 반환)
     if DB_ENABLED and db is not None:
