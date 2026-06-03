@@ -61,6 +61,10 @@ ai/models/*.pth
 ai/data/raw/
 ai/data/processed/
 ai/notebooks/.ipynb_checkpoints/
+ai/gesture_dataset*/
+ai/object_dataset*/
+ai/object_raw*/
+ai/temp/
 
 # === Database 로컬 파일 ===
 *.db
