@@ -15,3 +15,5 @@
 *.zip binary
 *.pth binary
 *.pt binary
+*.task binary
+*.tflite binary
