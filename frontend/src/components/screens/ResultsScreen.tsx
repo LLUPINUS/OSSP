@@ -1,7 +1,9 @@
 import { useRef, useState } from "react";
 import { useVideoStore } from "../../store/useVideoStore";
 import { runSearch, loadMore } from "../../lib/search";
+import { useSuggest } from "../../hooks/useSuggest";
 import type { VideoSearchResult } from "../../types";
+import SuggestList from "../SuggestList";
 import { BackIcon, SearchIcon, VideoGlyphIcon, XIcon } from "../icons";
 import PreCookSheet from "./PreCookSheet";
 
@@ -20,10 +22,17 @@ export default function ResultsScreen() {
   const [draft, setDraft] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasText = draft.trim().length > 0;
+  const { suggestions, open, highlight, onInputKeyDown, select, close, setHighlight } =
+    useSuggest(draft, (value) => {
+      setDraft(value);
+      runSearch(value);
+      inputRef.current?.blur();
+    });
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!hasText) return;
+    close();
     runSearch(draft);
     inputRef.current?.blur();
   }
@@ -58,13 +67,15 @@ export default function ResultsScreen() {
         <form
           onSubmit={handleSubmit}
           autoComplete="off"
-          className="flex h-[42px] min-w-0 flex-1 items-center gap-2.5 rounded-[21px] bg-fill px-4"
+          className="relative flex h-[42px] min-w-0 flex-1 items-center gap-2.5 rounded-[21px] bg-fill px-4"
         >
           <SearchIcon className="h-[18px] w-[18px] shrink-0 text-ink-3" />
           <input
             ref={inputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={onInputKeyDown}
+            onBlur={close}
             enterKeyHint="search"
             className="min-w-0 flex-1 bg-transparent text-[15px] font-semibold tracking-[-0.01em] text-ink outline-none"
           />
@@ -77,6 +88,15 @@ export default function ResultsScreen() {
             >
               <XIcon className="h-full w-full" />
             </button>
+          )}
+          {open && (
+            <SuggestList
+              items={suggestions}
+              highlight={highlight}
+              onSelect={select}
+              onHover={setHighlight}
+              className="absolute left-0 right-0 top-[calc(100%+10px)] z-30"
+            />
           )}
         </form>
       </div>

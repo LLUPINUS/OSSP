@@ -15,6 +15,23 @@ export async function searchVideos(
   return res.json();
 }
 
+// 검색어 자동완성. 백엔드 /api/suggest(Google suggestqueries 프록시)에서 추천어 목록을 받는다.
+// 자동완성은 부가 기능이라 실패(네트워크/abort/4xx)는 빈 배열로 흡수하고 검색 흐름을 막지 않는다.
+export async function fetchSuggestions(
+  query: string,
+  signal?: AbortSignal
+): Promise<string[]> {
+  const q = query.trim();
+  if (!q) return [];
+  try {
+    const res = await fetch(`/api/suggest?q=${encodeURIComponent(q)}`, { signal });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchCookingSteps(
   video: VideoSearchResult
 ): Promise<CookingStep[]> {
