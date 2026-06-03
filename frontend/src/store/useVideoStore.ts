@@ -17,6 +17,7 @@ interface VideoState {
   searchQuery: string;
   searchResults: VideoSearchResult[];
   searchStatus: SearchStatus;
+  nextPageToken: string | null;
 
   // ── 선택/단계 ──
   selectedVideo: VideoSearchResult | null;
@@ -33,7 +34,9 @@ interface VideoState {
   setPreCookOpen: (open: boolean) => void;
   setSearchQuery: (query: string) => void;
   setSearchResults: (results: VideoSearchResult[]) => void;
+  appendSearchResults: (results: VideoSearchResult[]) => void;
   setSearchStatus: (status: SearchStatus) => void;
+  setNextPageToken: (token: string | null) => void;
   setSelectedVideo: (video: VideoSearchResult | null) => void;
   setCookingSteps: (steps: CookingStep[]) => void;
   setCurrentStepIndex: (index: number) => void;
@@ -52,6 +55,7 @@ export const useVideoStore = create<VideoState>((set) => ({
   searchQuery: "",
   searchResults: [],
   searchStatus: "idle",
+  nextPageToken: null,
 
   selectedVideo: null,
   cookingSteps: [],
@@ -65,7 +69,9 @@ export const useVideoStore = create<VideoState>((set) => ({
   setPreCookOpen: (preCookOpen) => set({ preCookOpen }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSearchResults: (searchResults) => set({ searchResults }),
+  appendSearchResults: (results) => set((s) => ({ searchResults: [...s.searchResults, ...results] })),
   setSearchStatus: (searchStatus) => set({ searchStatus }),
+  setNextPageToken: (nextPageToken) => set({ nextPageToken }),
   setSelectedVideo: (selectedVideo) => set({ selectedVideo }),
   setCookingSteps: (cookingSteps) => set({ cookingSteps }),
   setCurrentStepIndex: (currentStepIndex) => set({ currentStepIndex }),
@@ -80,5 +86,6 @@ export const useVideoStore = create<VideoState>((set) => ({
       searchQuery: "",
       searchResults: [],
       searchStatus: "idle",
+      nextPageToken: null,
     }),
 }));

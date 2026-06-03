@@ -7,7 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.schemas import CookingStepOut, VideoSearchOut
+from app.schemas import CookingStepOut, VideoSearchOut, SearchPageOut  # noqa: F401
 from api.youtube_search import search_videos
 from api.transcript import get_transcript, format_for_gemini
 from api.gemini_parser import parse_cooking_steps, GeminiParseError
@@ -70,11 +70,13 @@ if DB_ENABLED:
         }
 
 
-@app.get("/api/search", response_model=list[VideoSearchOut])
-async def search(q: str = Query(..., min_length=1)):
+@app.get("/api/search", response_model=SearchPageOut)
+async def search(
+    q: str = Query(..., min_length=1),
+    pageToken: str = Query(default=None),
+):
     try:
-        results = search_videos(q)
-        return results
+        return await search_videos(q, page_token=pageToken)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

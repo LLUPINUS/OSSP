@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     // cloudflared quick tunnel 도메인 허용 (없으면 Vite가 "Blocked request" 반환)
-    allowedHosts: ['.trycloudflare.com'],
+    allowedHosts: true,
     proxy: {
       "/api": {
         target: "http://localhost:8000",
