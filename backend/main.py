@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.schemas import CookingStepOut, VideoSearchOut
+from app.schemas import CookingStepOut, VideoSearchOut, SearchPageOut  # noqa: F401
 from api.youtube_search import search_videos
 from api.transcript import get_transcript, format_for_gemini
 from api.gemini_parser import parse_cooking_steps, GeminiParseError
@@ -84,19 +84,20 @@ async def suggest(q: str = Query(..., min_length=1)):
                 params={"client": "firefox", "q": q, "hl": "ko"},
                 timeout=3.0,
             )
-            # Google은 hl=ko일 때 EUC-KR로 응답하므로 resp.json()(UTF-8 가정)은 한글에서 깨진다.
-            # charset 헤더를 반영해 디코딩된 resp.text를 직접 파싱한다.
             data = json.loads(resp.text)
             return data[1]
     except Exception:
         return []
 
 
-@app.get("/api/search", response_model=list[VideoSearchOut])
-async def search(q: str = Query(..., min_length=1)):
+@app.get("/api/search", response_model=SearchPageOut)
+async def search(
+    q: str = Query(..., min_length=1),
+    pageToken: str = Query(default=None),
+):
+  
     try:
-        results = search_videos(q)
-        return results
+        return await search_videos(q, page_token=pageToken)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

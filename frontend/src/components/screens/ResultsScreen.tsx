@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useVideoStore } from "../../store/useVideoStore";
-import { runSearch } from "../../lib/search";
+import { runSearch, loadMore } from "../../lib/search";
 import { useSuggest } from "../../hooks/useSuggest";
 import type { VideoSearchResult } from "../../types";
 import SuggestList from "../SuggestList";
@@ -11,9 +11,12 @@ export default function ResultsScreen() {
   const searchQuery = useVideoStore((s) => s.searchQuery);
   const searchResults = useVideoStore((s) => s.searchResults);
   const searchStatus = useVideoStore((s) => s.searchStatus);
+  const nextPageToken = useVideoStore((s) => s.nextPageToken);
   const goHome = useVideoStore((s) => s.goHome);
   const setSelectedVideo = useVideoStore((s) => s.setSelectedVideo);
   const setPreCookOpen = useVideoStore((s) => s.setPreCookOpen);
+
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // 검색창은 편집 가능한 draft. 라벨은 실제 실행된 검색어(searchQuery)를 쓴다.
   const [draft, setDraft] = useState(searchQuery);
@@ -42,6 +45,12 @@ export default function ResultsScreen() {
   function openPre(video: VideoSearchResult) {
     setSelectedVideo(video);
     setPreCookOpen(true);
+  }
+
+  async function handleLoadMore() {
+    setLoadingMore(true);
+    await loadMore();
+    setLoadingMore(false);
   }
 
   return (
@@ -113,6 +122,15 @@ export default function ResultsScreen() {
           searchResults.map((v) => (
             <ResultItem key={v.videoId} video={v} onSelect={openPre} />
           ))}
+        {searchStatus === "success" && nextPageToken && (
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingMore}
+            className="mt-1 w-full rounded-[14px] bg-fill py-3.5 text-[14px] font-semibold tracking-[-0.01em] text-ink-2 transition-opacity active:opacity-60 disabled:opacity-40"
+          >
+            {loadingMore ? "불러오는 중..." : "더 보기"}
+          </button>
+        )}
       </div>
 
       {/* 시작 전 바텀시트 (항상 마운트, preCookOpen으로 슬라이드) */}

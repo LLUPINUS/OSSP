@@ -3,8 +3,14 @@ import type { CookingStep, VideoSearchResult } from "../types";
 // 백엔드 API 계약 (기존 SearchBar에서 검증된 호출을 공통화).
 // Vite dev 프록시가 /api → http://localhost:8000 로 전달.
 
-export async function searchVideos(query: string): Promise<VideoSearchResult[]> {
-  const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+export async function searchVideos(
+  query: string,
+  pageToken?: string,
+): Promise<{ items: VideoSearchResult[]; nextPageToken: string | null }> {
+  const url = pageToken
+    ? `/api/search?q=${encodeURIComponent(query)}&pageToken=${pageToken}`
+    : `/api/search?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error("검색 실패");
   return res.json();
 }
