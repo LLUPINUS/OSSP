@@ -29,7 +29,7 @@ requires_test_db = pytest.mark.skipif(
 # CLAUDE.md 확정 행동 라벨 4종 (시드)
 ACTION_LABELS = [
     ("cutting", "썰기"),
-    ("grilling", "굽기"),
+    ("roasting", "굽기"),
     ("stir_frying", "볶기"),
     ("stirring", "젓기"),
 ]
