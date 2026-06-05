@@ -7,6 +7,8 @@ import YouTube, {
 import { useVideoStore } from "../../store/useVideoStore";
 import { getStream, stopCamera } from "../../lib/camera";
 import { enterLandscape, exitLandscape } from "../../lib/orientation";
+import { createRecognizers, recognizeFrame } from "../../lib/cv/recognizer";
+import { createDecider, ACTION_KO, DEFAULT_CONFIG } from "../../lib/cv/decide";
 import { CheckIcon, PlayIcon } from "../icons";
 
 const OPTS: YouTubeProps["opts"] = {
@@ -32,9 +34,13 @@ function fmt(sec: number): string {
 }
 const pad2 = (n: number) => String(n).padStart(2, "0");
 
-// 시뮬레이션 인식 타이밍 (ms)
-const SIM_ANALYZE = 2500;
-const SIM_RECOGNIZED = 1200;
+// 인식됨 → 다음 단계 전환까지 잠깐 보여주는 시간 (ms)
+const RECOGNIZED_HOLD = 1200;
+
+// 게이트 방식 (설계문서 §7.2) — 기본 관대(b). 정밀(a)로 바꾸려면 "precise".
+//  lenient: 유효한 요리 동작이 잡히면 재개 (라벨은 표시용)
+//  precise: 잡힌 action이 현재 단계 expected(gesture, 한글)와 일치할 때만 재개
+const GATE_MODE: "lenient" | "precise" = "lenient";
 
 export default function SyncPlayback() {
   const selectedVideo = useVideoStore((s) => s.selectedVideo);
@@ -50,6 +56,9 @@ export default function SyncPlayback() {
   const listRef = useRef<HTMLDivElement>(null);
   const gateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cvLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const gateGenRef = useRef(0); // 진행 중 비동기 게이트 무효화용 세대 토큰
+  const deciderRef = useRef(createDecider(DEFAULT_CONFIG));
 
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -72,8 +81,11 @@ export default function SyncPlayback() {
 
   // ── 타이머/컨트롤 헬퍼 ──
   function clearGate() {
+    gateGenRef.current++; // 진행 중인 비동기 게이트(모델 로드/추론 루프) 무효화
     if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
     gateTimerRef.current = null;
+    if (cvLoopRef.current) clearInterval(cvLoopRef.current);
+    cvLoopRef.current = null;
   }
   function clearHideTimer() {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
@@ -124,7 +136,7 @@ export default function SyncPlayback() {
     showThenHide();
   }
 
-  // 단계 끝 도달 → 일시정지 후 인식 사이클
+  // 단계 끝 도달 → 일시정지 후 인식 사이클 (카메라 10fps 추론 + 판단)
   function triggerGate() {
     const p = playerRef.current;
     if (!p) return;
@@ -133,17 +145,51 @@ export default function SyncPlayback() {
     holdControls();
     setAiGateState("analyzing");
 
-    // ───────────────────────────────────────────────────────────────
-    // [CV 연동 지점] 아래 타이머는 시뮬레이션이다.
-    // 실제 구현은 여기서 카메라 프레임을 캡처해(canvas.toBlob) 1~2초 간격으로
-    // POST /recognize {stepId, frame} 호출 → "동작 맞음" 응답 시 recognized로.
-    // (UI 상태 전환 로직은 그대로 재사용 — README 6)
-    // ───────────────────────────────────────────────────────────────
-    clearGate();
-    gateTimerRef.current = setTimeout(() => {
-      setAiGateState("recognized");
-      gateTimerRef.current = setTimeout(advanceToNext, SIM_RECOGNIZED);
-    }, SIM_ANALYZE);
+    clearGate(); // 이전 게이트 정리 + 세대 증가
+    const gen = gateGenRef.current;
+
+    void (async () => {
+      try {
+        await createRecognizers(); // 최초 1회 모델 로드(이후 즉시 반환)
+      } catch (e) {
+        // 모델 로드 실패 → analyzing 유지, 사용자가 수동(다음/재생)으로 진행
+        console.error("[cv] 모델 로드 실패 — 수동 진행으로 폴백", e);
+        return;
+      }
+      if (gen !== gateGenRef.current) return; // 그새 취소(수동 진행 등)
+
+      deciderRef.current.reset();
+      cvLoopRef.current = setInterval(() => {
+        const v = camVideoRef.current;
+        if (!v || v.videoWidth === 0) return;
+
+        let confirmed: string | null;
+        try {
+          const r = recognizeFrame(v, performance.now());
+          confirmed = deciderRef.current.process(
+            r,
+            v.videoWidth,
+            v.videoHeight,
+          ).confirmed;
+        } catch (e) {
+          console.error("[cv] 추론 오류", e);
+          return;
+        }
+        if (!confirmed) return; // 아직 확정 안 됨 → 계속 대기(사용자 페이스)
+
+        // 정밀 모드: 확정 action이 현재 단계 동작(gesture, 한글)과 일치해야 통과
+        if (GATE_MODE === "precise") {
+          const expectedKo = stepsRef.current[idxRef.current]?.gesture;
+          if (expectedKo && ACTION_KO[confirmed] !== expectedKo) return;
+        }
+
+        // 게이트 통과 → 잠깐 "인식됨" 표시 후 다음 단계로
+        if (cvLoopRef.current) clearInterval(cvLoopRef.current);
+        cvLoopRef.current = null;
+        setAiGateState("recognized");
+        gateTimerRef.current = setTimeout(advanceToNext, RECOGNIZED_HOLD);
+      }, 100); // 10fps
+    })();
   }
 
   function goStep(i: number) {
@@ -199,6 +245,9 @@ export default function SyncPlayback() {
   useEffect(() => {
     const s = getStream();
     if (s && camVideoRef.current) camVideoRef.current.srcObject = s;
+    // 모델 미리 로드(21MB) — 첫 게이트에서 기다리지 않도록 진입 시 워밍업. 실패해도 무시
+    // (게이트 시점에 재시도하고, 끝내 실패하면 수동 진행으로 폴백).
+    void createRecognizers().catch(() => {});
     // 진입 시 가로 고정 시도(직전 제스처의 transient activation이 남아있으면 성공,
     // 아니면 첫 재생 탭에서 재시도된다).
     void enterLandscape();
@@ -210,6 +259,7 @@ export default function SyncPlayback() {
       window.removeEventListener("mousemove", onMove);
       if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
       if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
+      if (cvLoopRef.current) clearInterval(cvLoopRef.current);
       exitLandscape();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
