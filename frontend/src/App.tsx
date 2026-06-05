@@ -1,12 +1,23 @@
+import { useEffect, useState } from "react";
 import { useVideoStore } from "./store/useVideoStore";
 import HomeScreen from "./components/screens/HomeScreen";
 import ResultsScreen from "./components/screens/ResultsScreen";
 import CameraGuide from "./components/screens/CameraGuide";
 import ProcessingScreen from "./components/screens/ProcessingScreen";
 import SyncPlayback from "./components/screens/SyncPlayback";
+import CvDebug from "./components/screens/CvDebug";
 
 function App() {
   const phase = useVideoStore((s) => s.phase);
+
+  // dev 전용: #cvdebug 해시면 phase 머신을 우회하고 CV 디버그 화면만 렌더.
+  const [hash, setHash] = useState(window.location.hash);
+  useEffect(() => {
+    const on = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", on);
+    return () => window.removeEventListener("hashchange", on);
+  }, []);
+  if (hash === "#cvdebug") return <CvDebug />;
 
   return (
     // 데스크탑에선 모바일 폭으로 중앙 정렬, 모바일에선 풀블리드
