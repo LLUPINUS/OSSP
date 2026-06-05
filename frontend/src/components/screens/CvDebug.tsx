@@ -12,6 +12,11 @@ import {
   getDelegate,
   type FrameResult,
 } from "../../lib/cv/recognizer";
+import {
+  explainFrame,
+  DEFAULT_CONFIG,
+  type FrameExplain,
+} from "../../lib/cv/decide";
 
 type Status = "init" | "ready" | "error";
 
@@ -27,6 +32,7 @@ export default function CvDebug() {
   const [err, setErr] = useState("");
   const [fps, setFps] = useState(0);
   const [result, setResult] = useState<FrameResult>(EMPTY);
+  const [explain, setExplain] = useState<FrameExplain | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,7 +58,8 @@ export default function CvDebug() {
         return;
       }
 
-      draw(canvas, r);
+      const ex = explainFrame(r, canvas.width, canvas.height);
+      draw(canvas, r, ex);
 
       const f = fpsRef.current;
       f.frames++;
@@ -63,6 +70,7 @@ export default function CvDebug() {
         f.last = now;
       }
       setResult(r);
+      setExplain(ex);
     }
 
     (async () => {
@@ -164,17 +172,26 @@ export default function CvDebug() {
       {/* 하단: 감지 결과 텍스트 */}
       <div className="max-h-[24vh] shrink-0 overflow-y-auto border-t border-white/10 px-4 py-2 text-[12px] leading-relaxed">
         <div className="mb-1 font-bold text-white/80">
-          손 {result.hands.length} · 도구 {result.objects.length}
+          손 {result.hands.length} · 도구 {result.objects.length} · grip{" "}
+          {explain?.grip ?? 0}
+          <span className="ml-2 font-normal text-white/40">
+            (통과조건: d≤{DEFAULT_CONFIG.distanceThreshold} · w≥
+            {DEFAULT_CONFIG.threshold})
+          </span>
         </div>
         {result.hands.map((h, i) => (
           <div key={`h${i}`} className="text-cyan-300">
             ✋ {h.handedness} · {h.gesture} ({(h.gestureScore * 100).toFixed(0)}%)
           </div>
         ))}
-        {result.objects.map((o, i) => (
-          <div key={`o${i}`} className="text-lime-300">
-            🔪 {o.label} ({(o.score * 100).toFixed(0)}%) · bbox{" "}
-            {o.bbox.width.toFixed(0)}×{o.bbox.height.toFixed(0)}
+        {(explain?.objects ?? []).map((o, i) => (
+          <div key={`o${i}`} className={o.pass ? "text-green-400" : "text-white/70"}>
+            {o.pass ? "✅" : "❌"} {o.label}
+            {o.mappedAction ? `→${o.mappedAction}` : "(미매핑)"} · conf{" "}
+            {(o.score * 100).toFixed(0)}% · d=
+            {o.distance === Infinity ? "∞" : o.distance.toFixed(2)}
+            {o.distOk ? "" : "✗"} · w={o.weighted.toFixed(2)}
+            {o.weightedOk ? "" : "✗"}
           </div>
         ))}
       </div>
@@ -187,14 +204,15 @@ function msg(e: unknown): string {
 }
 
 // ── 캔버스 드로잉 (영상 본래 해상도 좌표계) ──
-function draw(canvas: HTMLCanvasElement, r: FrameResult) {
+function draw(canvas: HTMLCanvasElement, r: FrameResult, ex: FrameExplain) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const w = canvas.width;
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
+  const palmIdx = DEFAULT_CONFIG.palmLandmark;
 
-  // 손: 연결선 + 21점
+  // 손: 연결선 + 21점 (+ palm 점 노랑 강조 = 거리 기준점)
   for (const hand of r.hands) {
     const pts = hand.landmarks;
     ctx.strokeStyle = "#22d3ee";
@@ -215,20 +233,55 @@ function draw(canvas: HTMLCanvasElement, r: FrameResult) {
       ctx.arc(p.x * w, p.y * h, rad, 0, Math.PI * 2);
       ctx.fill();
     }
+    const palm = pts[palmIdx];
+    if (palm) {
+      ctx.fillStyle = "#facc15";
+      ctx.beginPath();
+      ctx.arc(palm.x * w, palm.y * h, rad * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     const wrist = pts[0];
     if (wrist) {
       label(ctx, `${hand.handedness} ${hand.gesture}`, wrist.x * w, wrist.y * h, w);
     }
   }
 
-  // 도구: bbox(픽셀) + 라벨
-  ctx.strokeStyle = "#a3e635";
-  ctx.lineWidth = Math.max(2, w / 240);
-  for (const o of r.objects) {
+  // palm 점들(픽셀)
+  const palms = r.hands
+    .map((hd) => hd.landmarks[palmIdx])
+    .filter((p): p is { x: number; y: number; z: number } => !!p)
+    .map((p) => ({ x: p.x * w, y: p.y * h }));
+
+  // 도구: bbox + 라벨, 매핑된 도구는 palm까지 거리선(통과=초록/탈락=빨강)
+  r.objects.forEach((o, i) => {
     const { originX, originY, width, height } = o.bbox;
+    const info = ex.objects[i];
+    ctx.strokeStyle = "#a3e635";
+    ctx.lineWidth = Math.max(2, w / 240);
     ctx.strokeRect(originX, originY, width, height);
     label(ctx, `${o.label} ${(o.score * 100).toFixed(0)}%`, originX, originY, w);
-  }
+
+    if (info?.mappedAction && palms.length) {
+      const ccx = originX + width / 2;
+      const ccy = originY + height / 2;
+      let near = palms[0];
+      let nd = Infinity;
+      for (const p of palms) {
+        const d = Math.hypot(p.x - ccx, p.y - ccy);
+        if (d < nd) {
+          nd = d;
+          near = p;
+        }
+      }
+      ctx.strokeStyle = info.distOk ? "#22c55e" : "#ef4444";
+      ctx.lineWidth = Math.max(2, w / 300);
+      ctx.beginPath();
+      ctx.moveTo(near.x, near.y);
+      ctx.lineTo(ccx, ccy);
+      ctx.stroke();
+      label(ctx, `d=${info.distance.toFixed(2)}`, (near.x + ccx) / 2, (near.y + ccy) / 2, w);
+    }
+  });
 }
 
 function label(
