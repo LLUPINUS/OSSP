@@ -65,6 +65,9 @@ ai/gesture_dataset*/
 ai/object_dataset*/
 ai/object_raw*/
 ai/temp/
+# 브라우저 서빙용 복사본 (predev/prebuild가 자동 생성 — 원본만 git 추적)
+frontend/public/models/
+frontend/public/mediapipe-wasm/
 
 # === Database 로컬 파일 ===
 *.db
