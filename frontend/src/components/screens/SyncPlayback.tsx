@@ -95,16 +95,14 @@ export default function SyncPlayback() {
     clearHideTimer();
     hideTimerRef.current = setTimeout(() => setControlsVisible(false), 3000);
   }
-  // 탭/조작 시: 컨트롤 표시 (재생 중이면 3초 후 자동 숨김)
+  // 탭/조작 시: 컨트롤 표시 후 잠시 뒤 자동 숨김 (재생/정지 무관)
   function revealControls() {
     setControlsVisible(true);
-    if (playingRef.current) scheduleHide();
-    else clearHideTimer();
+    scheduleHide();
   }
-  // 영상 탭: 유튜브처럼 컨트롤을 토글한다. 재생 중 표시 상태면 즉시 숨기고,
-  // 그 외(숨김 상태/정지)에는 표시한다. (정지 상태는 showControls가 항상 표시로 강제)
+  // 영상 탭: 유튜브처럼 컨트롤을 토글한다. 보이면 숨기고, 숨겨져 있으면 표시(잠시 후 자동 숨김).
   function toggleControls() {
-    if (playingRef.current && controlsVisible) {
+    if (controlsVisible) {
       setControlsVisible(false);
       clearHideTimer();
     } else {
@@ -142,7 +140,7 @@ export default function SyncPlayback() {
     if (!p) return;
     p.pauseVideo();
     setPlaying(false); // 폴링 정지
-    holdControls();
+    showThenHide(); // 분석 중에도 일반 상태처럼 잠시 뒤 자동 숨김 (상태는 오른쪽 패널이 표시)
     setAiGateState("analyzing");
 
     clearGate(); // 이전 게이트 정리 + 세대 증가
@@ -234,11 +232,12 @@ export default function SyncPlayback() {
   const onReady = (e: YouTubeEvent) => {
     playerRef.current = e.target;
     setDuration(e.target.getDuration?.() ?? 0);
-    const steps = stepsRef.current;
-    const step = steps[idxRef.current];
-    if (step) e.target.seekTo(timeToSec(step.start_time), true);
+    // 영상은 0:00부터 시작(인트로 포함) — 첫 단계로 건너뛰지 않는다.
+    // 단계 끝 게이트는 재생 중 폴링이 step end_time에서 처리한다.
+    setElapsed(0);
     // 첫 재생은 사용자 탭으로(자동재생 제한) → 정지 상태로 시작
     setAiGateState("waiting");
+    showThenHide(); // 진입 직후 컨트롤 잠깐 표시 후 자동 숨김
   };
 
   // ── 공유 카메라 스트림 attach + 가로 고정 + 언마운트 정리 ──
@@ -275,9 +274,9 @@ export default function SyncPlayback() {
     });
   }, [currentStepIndex]);
 
-  // ── 재생 중 폴링: 스크럽 갱신 + 현재 단계 end_time 도달 시 게이트 ──
+  // ── 시간 폴링: 스크럽은 정지 중에도 항상 실제 재생 위치를 반영.
+  //    단계 end_time 게이트 검사만 재생 중에 수행. ──
   useEffect(() => {
-    if (!playing) return;
     const id = setInterval(() => {
       const p = playerRef.current;
       if (!p) return;
@@ -286,6 +285,7 @@ export default function SyncPlayback() {
       const dur = p.getDuration?.() ?? 0;
       if (dur) setDuration(dur);
 
+      if (!playingRef.current) return; // 게이트 검사는 재생 중에만
       const steps = stepsRef.current;
       const idx = idxRef.current;
       const step = steps[idx];
@@ -297,7 +297,7 @@ export default function SyncPlayback() {
     }, 400);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing]);
+  }, []);
 
   // 안전 가드 (정상 흐름에선 steps>0 보장)
   if (!selectedVideo || cookingSteps.length === 0) {
@@ -317,8 +317,8 @@ export default function SyncPlayback() {
   const cur = cookingSteps[currentStepIndex];
   const isLast = currentStepIndex >= cookingSteps.length - 1;
   const progress = duration ? Math.min(100, (elapsed / duration) * 100) : 0;
-  // 정지/분석 중엔 항상 표시, 재생 중엔 자동 숨김 대상
-  const showControls = controlsVisible || !playing;
+  // 컨트롤 표시는 controlsVisible 단일 제어(자동 숨김·탭 토글). 정지/분석도 동일하게 동작.
+  const showControls = controlsVisible;
 
   return (
     <div className="fixed inset-0 z-50 grid grid-cols-[1fr_210px] grid-rows-1 bg-black max-[680px]:grid-cols-[1fr_172px]">
@@ -339,8 +339,8 @@ export default function SyncPlayback() {
         {/* 영상 탭 레이어: 탭하면 컨트롤 토글 (iframe 위에서 클릭 캡처) */}
         <div className="absolute inset-0 z-[2]" onClick={toggleControls} />
 
-        {/* 중앙 재생/일시정지 오버레이 (정지 시 노출) */}
-        {!playing && (
+        {/* 중앙 재생 오버레이 (정지 + 컨트롤 표시 시 노출 — 컨트롤과 함께 숨겨짐) */}
+        {!playing && showControls && (
           <button
             onClick={togglePlay}
             aria-label="재생"
