@@ -22,7 +22,7 @@ export default function ResultsScreen() {
   const [draft, setDraft] = useState(searchQuery);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasText = draft.trim().length > 0;
-  const { suggestions, open, highlight, onInputKeyDown, select, close, setHighlight } =
+  const { suggestions, open, highlight, onInputKeyDown, select, commit, close, setHighlight } =
     useSuggest(draft, (value) => {
       setDraft(value);
       runSearch(value);
@@ -32,7 +32,7 @@ export default function ResultsScreen() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!hasText) return;
-    close();
+    commit(draft); // 제출한 검색어로는 자동완성을 재오픈하지 않음
     runSearch(draft);
     inputRef.current?.blur();
   }

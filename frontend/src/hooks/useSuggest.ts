@@ -11,8 +11,9 @@ export function useSuggest(query: string, onSelect: (value: string) => void) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
-  // 방금 선택/확정한 검색어 — 그 값이 입력창에 반영돼도 자동완성을 다시 띄우지 않는다.
-  const skipRef = useRef<string | null>(null);
+  // 이미 '실행된' 검색어 — 그 값이 입력창에 그대로 남아도 자동완성을 다시 띄우지 않는다.
+  // 초기 query(결과 화면에 들고 들어온 검색어)도 실행된 것으로 간주해 마운트 시 자동 오픈을 막는다.
+  const skipRef = useRef<string | null>(query.trim() || null);
 
   useEffect(() => {
     const q = query.trim();
@@ -24,7 +25,8 @@ export function useSuggest(query: string, onSelect: (value: string) => void) {
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       const list = await fetchSuggestions(q, ctrl.signal);
-      if (ctrl.signal.aborted) return; // 다음 입력으로 취소된 stale 응답은 무시
+      // 취소됐거나, 그 사이 제출/선택돼 실행된 검색어가 됐으면 무시 (늦은 응답이 드롭다운을 다시 열지 않게)
+      if (ctrl.signal.aborted || q === skipRef.current) return;
       setSuggestions(list);
       setOpen(list.length > 0);
       setHighlight(-1);
@@ -40,9 +42,14 @@ export function useSuggest(query: string, onSelect: (value: string) => void) {
     setHighlight(-1);
   }
 
-  function select(value: string) {
-    skipRef.current = value; // 선택 결과가 query에 반영돼도 재오픈 방지
+  // 검색을 '실행'했음을 기록 (제출·선택 공통). 이후 같은 값이 입력창에 남아도 재오픈하지 않는다.
+  function commit(value: string) {
+    skipRef.current = value.trim();
     close();
+  }
+
+  function select(value: string) {
+    commit(value); // 선택 결과가 query에 반영돼도 재오픈 방지
     onSelect(value);
   }
 
@@ -71,5 +78,5 @@ export function useSuggest(query: string, onSelect: (value: string) => void) {
     }
   }
 
-  return { suggestions, open, highlight, onInputKeyDown, select, close, setHighlight };
+  return { suggestions, open, highlight, onInputKeyDown, select, commit, close, setHighlight };
 }

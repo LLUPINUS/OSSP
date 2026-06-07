@@ -7,7 +7,7 @@ import { ArrowRightIcon, SearchIcon } from "../icons";
 export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const hasText = query.trim().length > 0;
-  const { suggestions, open, highlight, onInputKeyDown, select, close, setHighlight } =
+  const { suggestions, open, highlight, onInputKeyDown, select, commit, close, setHighlight } =
     useSuggest(query, (value) => {
       setQuery(value);
       runSearch(value);
@@ -16,6 +16,7 @@ export default function HomeScreen() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!hasText) return;
+    commit(query); // 제출한 검색어로는 자동완성을 재오픈하지 않음
     runSearch(query);
   }
 
