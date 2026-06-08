@@ -41,8 +41,8 @@ export interface DecideConfig {
 export const DEFAULT_CONFIG: DecideConfig = {
   w1: 0.8,
   w2: 0.2,
-  threshold: 0.7,
-  distanceThreshold: 0.25, // ⚠️ 임시 — CV팀 미확정, 실측 튜닝 대상
+  threshold: 0.5,
+  distanceThreshold: 0.4, // ⚠️ 임시 — CV팀 미확정, 실측 튜닝 대상
   palmLandmark: 5,
   smoothing: { mode: "time", windowMs: 1000, ratio: 0.5 },
 };
