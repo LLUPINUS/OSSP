@@ -37,10 +37,10 @@ const pad2 = (n: number) => String(n).padStart(2, "0");
 // 인식됨 → 다음 단계 전환까지 잠깐 보여주는 시간 (ms)
 const RECOGNIZED_HOLD = 1200;
 
-// 게이트 방식 (설계문서 §7.2) — 기본 관대(b). 정밀(a)로 바꾸려면 "precise".
+// 게이트 방식 (설계문서 §7.2). 관대로 되돌리려면 "lenient"로만 바꾸면 됨.
 //  lenient: 유효한 요리 동작이 잡히면 재개 (라벨은 표시용)
 //  precise: 잡힌 action이 현재 단계 expected(gesture, 한글)와 일치할 때만 재개
-const GATE_MODE: "lenient" | "precise" = "lenient";
+const GATE_MODE: "lenient" | "precise" = "precise";
 
 export default function SyncPlayback() {
   const selectedVideo = useVideoStore((s) => s.selectedVideo);
@@ -67,14 +67,13 @@ export default function SyncPlayback() {
 
   // interval/timer에서 최신값 읽기용 ref
   const stepsRef = useRef(cookingSteps);
-  const idxRef = useRef(currentStepIndex);
   const playingRef = useRef(playing);
+  // 다음에 "그 단계 start_time에서 멈춰 동작을 기다릴" 단계 index.
+  // 설계: 각 단계 시작 전에 정지 → 그 단계 동작 인식 시 그 단계 영상 재생.
+  const pendingStepRef = useRef(0);
   useEffect(() => {
     stepsRef.current = cookingSteps;
   }, [cookingSteps]);
-  useEffect(() => {
-    idxRef.current = currentStepIndex;
-  }, [currentStepIndex]);
   useEffect(() => {
     playingRef.current = playing;
   }, [playing]);
@@ -120,26 +119,28 @@ export default function SyncPlayback() {
     clearHideTimer();
   }
 
-  function advanceToNext() {
+  // 인식됨 → 이어서 재생. seek 없이 현재 위치(멈춘 단계 start)부터 계속 재생하고,
+  // 다음 단계 start_time에서 폴링이 다시 게이트한다.
+  function resumeAfterGate() {
     clearGate();
-    const steps = stepsRef.current;
-    const next = idxRef.current + 1;
-    if (next >= steps.length) return;
-    setCurrentStepIndex(next);
+    pendingStepRef.current += 1; // 다음 게이트 대상 = 다음 단계
     const p = playerRef.current;
-    p?.seekTo(timeToSec(steps[next].start_time), true);
     p?.playVideo();
     setPlaying(true);
     setAiGateState("waiting");
     showThenHide();
   }
 
-  // 단계 끝 도달 → 일시정지 후 인식 사이클 (카메라 10fps 추론 + 판단)
+  // 단계 start 도달(또는 수동 점프) → 일시정지 후 인식 사이클 (카메라 10fps 추론 + 판단).
+  // pendingStepRef.current 단계의 동작을 기다린다(설계: 단계 시작 전에 멈춰 그 단계 동작 대기).
   function triggerGate() {
     const p = playerRef.current;
     if (!p) return;
+    const gateStep = pendingStepRef.current;
+    if (gateStep >= stepsRef.current.length) return; // 게이트할 단계 없음(마지막 이후)
     p.pauseVideo();
     setPlaying(false); // 폴링 정지
+    setCurrentStepIndex(gateStep); // 표시·하이라이트 = 멈춘(=수행할) 단계
     showThenHide(); // 분석 중에도 일반 상태처럼 잠시 뒤 자동 숨김 (상태는 오른쪽 패널이 표시)
     setAiGateState("analyzing");
 
@@ -175,32 +176,30 @@ export default function SyncPlayback() {
         }
         if (!confirmed) return; // 아직 확정 안 됨 → 계속 대기(사용자 페이스)
 
-        // 정밀 모드: 확정 action이 현재 단계 동작(gesture, 한글)과 일치해야 통과
+        // 정밀 모드: 확정 action이 이 단계 동작(gesture, 한글)과 일치해야 통과
         if (GATE_MODE === "precise") {
-          const expectedKo = stepsRef.current[idxRef.current]?.gesture;
+          const expectedKo = stepsRef.current[gateStep]?.gesture;
           if (expectedKo && ACTION_KO[confirmed] !== expectedKo) return;
         }
 
-        // 게이트 통과 → 잠깐 "인식됨" 표시 후 다음 단계로
+        // 게이트 통과 → 잠깐 "인식됨" 표시 후 이어서 재생
         if (cvLoopRef.current) clearInterval(cvLoopRef.current);
         cvLoopRef.current = null;
         setAiGateState("recognized");
-        gateTimerRef.current = setTimeout(advanceToNext, RECOGNIZED_HOLD);
+        gateTimerRef.current = setTimeout(resumeAfterGate, RECOGNIZED_HOLD);
       }, 100); // 10fps
     })();
   }
 
+  // 수동 단계 점프: 해당 단계 start로 이동 후 거기서 게이트(자동 흐름과 동일, 옵션 A).
   function goStep(i: number) {
     clearGate();
     const steps = stepsRef.current;
     const clamped = Math.max(0, Math.min(steps.length - 1, i));
-    setCurrentStepIndex(clamped);
+    pendingStepRef.current = clamped;
     const p = playerRef.current;
     p?.seekTo(timeToSec(steps[clamped].start_time), true);
-    p?.playVideo();
-    setPlaying(true);
-    setAiGateState("waiting");
-    showThenHide();
+    triggerGate(); // 그 단계 start에서 멈춰 그 단계 동작 대기
   }
 
   function togglePlay() {
@@ -214,6 +213,10 @@ export default function SyncPlayback() {
       holdControls();
     } else {
       void enterLandscape(); // 첫 재생 탭(제스처) 시 가로 고정 시도
+      // 분석(게이트) 중에 재생을 누르면 = 그 게이트를 강제로 건너뛴다.
+      // → 다음 단계 start에서 다시 멈추도록 게이트 대상을 한 칸 전진.
+      if (aiGateState === "analyzing") pendingStepRef.current += 1;
+      clearGate();
       p.playVideo();
       setPlaying(true);
       setAiGateState("waiting");
@@ -232,9 +235,11 @@ export default function SyncPlayback() {
   const onReady = (e: YouTubeEvent) => {
     playerRef.current = e.target;
     setDuration(e.target.getDuration?.() ?? 0);
-    // 영상은 0:00부터 시작(인트로 포함) — 첫 단계로 건너뛰지 않는다.
-    // 단계 끝 게이트는 재생 중 폴링이 step end_time에서 처리한다.
+    // 영상은 0:00부터 시작(인트로 포함) — 첫 단계로 건너뛰지 않는다(설계 a안).
+    // 첫 게이트는 재생 중 폴링이 0번 단계 start_time에서 처리한다.
     setElapsed(0);
+    setCurrentStepIndex(0);
+    pendingStepRef.current = 0; // 첫 게이트 = 0번 단계 start
     // 첫 재생은 사용자 탭으로(자동재생 제한) → 정지 상태로 시작
     setAiGateState("waiting");
     showThenHide(); // 진입 직후 컨트롤 잠깐 표시 후 자동 숨김
@@ -275,7 +280,7 @@ export default function SyncPlayback() {
   }, [currentStepIndex]);
 
   // ── 시간 폴링: 스크럽은 정지 중에도 항상 실제 재생 위치를 반영.
-  //    단계 end_time 게이트 검사만 재생 중에 수행. ──
+  //    다음 단계 start_time 도달 시 게이트(일시정지+분석)만 재생 중에 수행. ──
   useEffect(() => {
     const id = setInterval(() => {
       const p = playerRef.current;
@@ -287,11 +292,10 @@ export default function SyncPlayback() {
 
       if (!playingRef.current) return; // 게이트 검사는 재생 중에만
       const steps = stepsRef.current;
-      const idx = idxRef.current;
-      const step = steps[idx];
-      if (!step) return;
-      // 마지막 단계가 아니고, 현재 단계 끝에 도달하면 → 일시정지 + 분석
-      if (idx < steps.length - 1 && t >= timeToSec(step.end_time)) {
+      const pending = pendingStepRef.current;
+      // 다음 게이트 단계의 start_time에 도달하면 → 일시정지 + 그 단계 동작 분석.
+      // (각 단계 시작 전에 멈춰 그 단계 동작을 기다린다 — 설계 의도.)
+      if (pending < steps.length && t >= timeToSec(steps[pending].start_time)) {
         triggerGate();
       }
     }, 400);
