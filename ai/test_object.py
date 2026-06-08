@@ -12,7 +12,7 @@ from mediapipe.tasks.python import vision
 # 사용자 설정: 여기만 수정해서 사용
 # =====================================================
 
-MODEL_PATH = Path(__file__).resolve().parent / "model" / "object_04.tflite"
+MODEL_PATH = Path(__file__).resolve().parent / "model" / "object_08.tflite"
 
 CAMERA_ID = 0
 

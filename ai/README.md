@@ -6,7 +6,7 @@ MediaPipe Tasks API 기반의 커스텀 gesture recognizer와 object detector를
 ## Models
 
 - Gesture recognizer: `model/gesture_03.task`
-- Object detector: `model/object_04.tflite`
+- Object detector: `model/object_08.tflite`
 
 ## Classes
 
@@ -69,7 +69,7 @@ Object dataset 평가는 `train/labels.json`, `validation/labels.json`,
 python ai/evaluate_object_dataset.py \
   --dataset object_dataset5 \
   --split all \
-  --model ai/model/object_04.tflite
+  --model ai/model/object_08.tflite
 ```
 
 `labels.json`이 없고 파일명에 label이 들어있는 이미지셋은 filename label 기반으로 평가할 수 있습니다.
@@ -77,7 +77,7 @@ python ai/evaluate_object_dataset.py \
 ```bash
 python ai/evaluate_object_dataset2.py \
   --dataset gesture_dataset2 \
-  --model ai/model/object_04.tflite
+  --model ai/model/object_08.tflite
 ```
 
 평가 결과는 기본적으로 `evaluation_results/` 아래에 CSV, JSON, confusion matrix 이미지로 저장됩니다.
