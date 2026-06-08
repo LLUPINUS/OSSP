@@ -19,7 +19,7 @@ from mediapipe.tasks.python import vision
 
 
 DEFAULT_DATASET_DIR = Path(__file__).resolve().parent / "object_dataset5"
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "object_04.tflite"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "object_08.tflite"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 NO_DETECTION_LABEL = "__NO_DETECTION__"

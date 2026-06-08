@@ -28,7 +28,7 @@ async function copyIfChanged(src, dest) {
   const srcDir = resolve(repoRoot, "ai", "model");
   const destDir = resolve(frontend, "public", "models");
   await mkdir(destDir, { recursive: true });
-  for (const name of ["gesture_03.task", "object_04.tflite"]) {
+  for (const name of ["gesture_03.task", "object_08.tflite"]) {
     const src = resolve(srcDir, name);
     if (!existsSync(src)) {
       console.error(`[copy-models] 소스 모델 없음: ${src}`);

@@ -22,7 +22,7 @@ DEFAULT_GESTURE_MODEL_PATH = (
     MODEL_DIR / "gesture_03.task"
 )
 DEFAULT_OBJECT_MODEL_PATH = (
-    MODEL_DIR / "object_04.tflite"
+    MODEL_DIR / "object_08.tflite"
 )
 
 HAND_CONNECTIONS = (
