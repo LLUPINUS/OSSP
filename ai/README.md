@@ -5,7 +5,7 @@ MediaPipe Tasks API 기반의 커스텀 gesture recognizer와 object detector를
 
 ## Models
 
-- Gesture recognizer: `model/gesture_03.task`
+- Gesture recognizer: `model/gesture_04.task`
 - Object detector: `model/object_08.tflite`
 
 ## Classes
@@ -43,7 +43,7 @@ python ai/test_gesture_object.py --num-hands 2
 Gesture만 테스트:
 
 ```bash
-python ai/test_gesture.py --model ai/model/gesture_03.task
+python ai/test_gesture.py --model ai/model/gesture_04.task
 ```
 
 Object detector만 테스트:
@@ -59,7 +59,7 @@ Gesture dataset 평가는 class별 폴더 구조를 사용합니다.
 ```bash
 python ai/evaluate_gesture_dataset.py \
   --dataset gesture_dataset3 \
-  --model ai/model/gesture_03.task
+  --model ai/model/gesture_04.task
 ```
 
 Object dataset 평가는 `train/labels.json`, `validation/labels.json`,
