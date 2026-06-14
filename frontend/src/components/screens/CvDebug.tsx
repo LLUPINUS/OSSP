@@ -33,6 +33,7 @@ export default function CvDebug() {
   const [fps, setFps] = useState(0);
   const [result, setResult] = useState<FrameResult>(EMPTY);
   const [explain, setExplain] = useState<FrameExplain | null>(null);
+  const [dims, setDims] = useState({ w: 0, h: 0 }); // MediaPipe가 받는 프레임 해상도(진단용)
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +47,8 @@ export default function CvDebug() {
       if (canvas.width !== video.videoWidth) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
+        // MediaPipe가 실제로 받는 프레임 방향 확인용(가로 1280×720 vs 세로 720×1280)
+        setDims({ w: video.videoWidth, h: video.videoHeight });
       }
 
       let r: FrameResult;
@@ -121,8 +124,8 @@ export default function CvDebug() {
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-black text-white">
-      {/* 상단 바 */}
-      <div className="flex shrink-0 items-center gap-3 px-4 py-2 text-[13px]">
+      {/* 상단 바 (가로에선 영상 위에 떠서 영상 높이를 더 확보) */}
+      <div className="flex shrink-0 items-center gap-3 px-4 py-2 text-[13px] landscape:absolute landscape:inset-x-0 landscape:top-0 landscape:z-10 landscape:bg-gradient-to-b landscape:from-black/70 landscape:to-transparent">
         <button onClick={close} className="rounded-md bg-white/15 px-2.5 py-1 font-semibold">
           ← 닫기
         </button>
@@ -130,7 +133,11 @@ export default function CvDebug() {
         <span className="ml-auto tabular-nums text-white/70">
           {status === "ready" ? (
             <>
-              {fps} fps · delegate <b className="text-white">{getDelegate()}</b>
+              {fps} fps · {dims.w}×{dims.h}{" "}
+              <b className={dims.w >= dims.h ? "text-amber-400" : "text-emerald-400"}>
+                {dims.w >= dims.h ? "가로" : "세로"}
+              </b>{" "}
+              · delegate <b className="text-white">{getDelegate()}</b>
             </>
           ) : status === "init" ? (
             "모델 로딩 중…"
@@ -143,15 +150,17 @@ export default function CvDebug() {
         </button>
       </div>
 
-      {/* 영상 + 오버레이 */}
-      <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden">
+      {/* 본문: 세로=영상 위·텍스트 아래 / 가로=영상 좌·텍스트 우 */}
+      <div className="flex min-h-0 flex-1 flex-col landscape:flex-row">
+        {/* 영상 + 오버레이 */}
+        <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden">
         <div className="relative max-h-full max-w-full">
           <video
             ref={videoRef}
             autoPlay
             muted
             playsInline
-            className="block max-h-[70vh] w-auto"
+            className="block w-auto max-h-[70vh] landscape:max-h-full landscape:max-w-full"
           />
           <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
         </div>
@@ -169,8 +178,8 @@ export default function CvDebug() {
         )}
       </div>
 
-      {/* 하단: 감지 결과 텍스트 */}
-      <div className="max-h-[24vh] shrink-0 overflow-y-auto border-t border-white/10 px-4 py-2 text-[12px] leading-relaxed">
+      {/* 감지 결과: 세로=하단 / 가로=우측 패널 */}
+      <div className="max-h-[24vh] shrink-0 overflow-y-auto border-t border-white/10 px-4 py-2 text-[12px] leading-relaxed landscape:max-h-full landscape:w-56 landscape:border-l landscape:border-t-0 landscape:pt-12">
         <div className="mb-1 font-bold text-white/80">
           손 {result.hands.length} · 도구 {result.objects.length} · grip{" "}
           {explain?.grip ?? 0}
@@ -194,6 +203,7 @@ export default function CvDebug() {
             {o.weightedOk ? "" : "✗"}
           </div>
         ))}
+      </div>
       </div>
     </div>
   );
