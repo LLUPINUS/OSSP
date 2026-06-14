@@ -13,7 +13,7 @@ import {
 
 // predev/prebuild가 복사해 둔 정적 경로(public/).
 const WASM_PATH = "/mediapipe-wasm";
-const GESTURE_MODEL = "/models/gesture_03.task";
+const GESTURE_MODEL = "/models/gesture_04.task";
 const OBJECT_MODEL = "/models/object_08.tflite";
 
 export interface HandResult {

@@ -19,7 +19,7 @@ from mediapipe.tasks.python import vision
 PROJECT_DIR = Path(__file__).resolve().parent
 MODEL_DIR = PROJECT_DIR / "model"
 DEFAULT_GESTURE_MODEL_PATH = (
-    MODEL_DIR / "gesture_03.task"
+    MODEL_DIR / "gesture_04.task"
 )
 DEFAULT_OBJECT_MODEL_PATH = (
     MODEL_DIR / "object_08.tflite"

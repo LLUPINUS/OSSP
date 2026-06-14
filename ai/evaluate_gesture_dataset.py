@@ -18,7 +18,7 @@ from mediapipe.tasks.python.components.processors import ClassifierOptions
 
 
 DEFAULT_DATASET_DIR = Path(__file__).resolve().parent / "gesture_dataset3"
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "gesture_03.task"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "gesture_04.task"
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 NO_HAND_LABEL = "__NO_HAND__"

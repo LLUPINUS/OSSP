@@ -16,7 +16,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "gesture_03.task"
+DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "model" / "gesture_04.task"
 
 HAND_CONNECTIONS = (
     (0, 1),
