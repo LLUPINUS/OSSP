@@ -7,7 +7,7 @@ import YouTube, {
 import { useVideoStore } from "../../store/useVideoStore";
 import { getStream, stopCamera } from "../../lib/camera";
 import { enterLandscape, exitLandscape } from "../../lib/orientation";
-import { createRecognizers, recognizeFrame } from "../../lib/cv/recognizer";
+import { createRecognizers, recognizeFrame, type FrameResult } from "../../lib/cv/recognizer";
 import { createDecider, ACTION_KO, DEFAULT_CONFIG } from "../../lib/cv/decide";
 import { CheckIcon, PlayIcon } from "../icons";
 
@@ -42,6 +42,13 @@ const RECOGNIZED_HOLD = 1200;
 //  precise: 잡힌 action이 현재 단계 expected(gesture, 한글)와 일치할 때만 재개
 const GATE_MODE: "lenient" | "precise" = "precise";
 
+// pause/resume 제스처 (gesture_04 라벨) — 재생/정지 전 구간에서 영상 제어.
+const PAUSE_GESTURE = "pause";
+const RESUME_GESTURE = "resume";
+const GESTURE_CONF = 0.7; // confidence 문턱(이하면 무시)
+const GESTURE_CONFIRM_FRAMES = 3; // 연속 N프레임 일치 시 확정(흔들림 방지)
+const GESTURE_COOLDOWN_MS = 1500; // 발동 후 무시 시간(연속 토글 방지)
+
 export default function SyncPlayback() {
   const selectedVideo = useVideoStore((s) => s.selectedVideo);
   const cookingSteps = useVideoStore((s) => s.cookingSteps);
@@ -57,8 +64,14 @@ export default function SyncPlayback() {
   const gateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cvLoopRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const gateGenRef = useRef(0); // 진행 중 비동기 게이트 무효화용 세대 토큰
   const deciderRef = useRef(createDecider(DEFAULT_CONFIG));
+  const aiGateStateRef = useRef(aiGateState); // 루프에서 게이트 상태 읽기용
+  // pause/resume 제스처 검출 상태
+  const gestureHoldRef = useRef<{ label: "pause" | "resume" | null; count: number }>({
+    label: null,
+    count: 0,
+  });
+  const cooldownUntilRef = useRef(0);
 
   const [playing, setPlaying] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -77,14 +90,15 @@ export default function SyncPlayback() {
   useEffect(() => {
     playingRef.current = playing;
   }, [playing]);
+  useEffect(() => {
+    aiGateStateRef.current = aiGateState;
+  }, [aiGateState]);
 
   // ── 타이머/컨트롤 헬퍼 ──
   function clearGate() {
-    gateGenRef.current++; // 진행 중인 비동기 게이트(모델 로드/추론 루프) 무효화
+    // 예약된 resumeAfterGate 타이머만 취소(인식 루프는 항상 살아 있음 — 언마운트에서만 정리).
     if (gateTimerRef.current) clearTimeout(gateTimerRef.current);
     gateTimerRef.current = null;
-    if (cvLoopRef.current) clearInterval(cvLoopRef.current);
-    cvLoopRef.current = null;
   }
   function clearHideTimer() {
     if (hideTimerRef.current) clearTimeout(hideTimerRef.current);
@@ -127,68 +141,28 @@ export default function SyncPlayback() {
     const p = playerRef.current;
     p?.playVideo();
     setPlaying(true);
+    playingRef.current = true;
     setAiGateState("waiting");
+    aiGateStateRef.current = "waiting";
     showThenHide();
   }
 
-  // 단계 start 도달(또는 수동 점프) → 일시정지 후 인식 사이클 (카메라 10fps 추론 + 판단).
-  // pendingStepRef.current 단계의 동작을 기다린다(설계: 단계 시작 전에 멈춰 그 단계 동작 대기).
+  // 단계 start 도달(또는 수동 점프) → 일시정지 + analyzing 진입.
+  // 실제 요리동작 판정은 "항상 도는 인식 루프"가 analyzing 동안 수행한다(아래 useEffect).
   function triggerGate() {
     const p = playerRef.current;
     if (!p) return;
     const gateStep = pendingStepRef.current;
     if (gateStep >= stepsRef.current.length) return; // 게이트할 단계 없음(마지막 이후)
     p.pauseVideo();
-    setPlaying(false); // 폴링 정지
+    setPlaying(false);
+    playingRef.current = false; // 폴링 즉시 정지
     setCurrentStepIndex(gateStep); // 표시·하이라이트 = 멈춘(=수행할) 단계
-    showThenHide(); // 분석 중에도 일반 상태처럼 잠시 뒤 자동 숨김 (상태는 오른쪽 패널이 표시)
+    showThenHide();
     setAiGateState("analyzing");
-
-    clearGate(); // 이전 게이트 정리 + 세대 증가
-    const gen = gateGenRef.current;
-
-    void (async () => {
-      try {
-        await createRecognizers(); // 최초 1회 모델 로드(이후 즉시 반환)
-      } catch (e) {
-        // 모델 로드 실패 → analyzing 유지, 사용자가 수동(다음/재생)으로 진행
-        console.error("[cv] 모델 로드 실패 — 수동 진행으로 폴백", e);
-        return;
-      }
-      if (gen !== gateGenRef.current) return; // 그새 취소(수동 진행 등)
-
-      deciderRef.current.reset();
-      cvLoopRef.current = setInterval(() => {
-        const v = camVideoRef.current;
-        if (!v || v.videoWidth === 0) return;
-
-        let confirmed: string | null;
-        try {
-          const r = recognizeFrame(v, performance.now());
-          confirmed = deciderRef.current.process(
-            r,
-            v.videoWidth,
-            v.videoHeight,
-          ).confirmed;
-        } catch (e) {
-          console.error("[cv] 추론 오류", e);
-          return;
-        }
-        if (!confirmed) return; // 아직 확정 안 됨 → 계속 대기(사용자 페이스)
-
-        // 정밀 모드: 확정 action이 이 단계 동작(gesture, 한글)과 일치해야 통과
-        if (GATE_MODE === "precise") {
-          const expectedKo = stepsRef.current[gateStep]?.gesture;
-          if (expectedKo && ACTION_KO[confirmed] !== expectedKo) return;
-        }
-
-        // 게이트 통과 → 잠깐 "인식됨" 표시 후 이어서 재생
-        if (cvLoopRef.current) clearInterval(cvLoopRef.current);
-        cvLoopRef.current = null;
-        setAiGateState("recognized");
-        gateTimerRef.current = setTimeout(resumeAfterGate, RECOGNIZED_HOLD);
-      }, 100); // 10fps
-    })();
+    aiGateStateRef.current = "analyzing";
+    clearGate(); // 예약된 게이트 타이머 정리
+    deciderRef.current.reset(); // 요리동작 스무딩 초기화
   }
 
   // 수동 단계 점프: 해당 단계 start로 이동 후 거기서 게이트(자동 흐름과 동일, 옵션 A).
@@ -202,26 +176,35 @@ export default function SyncPlayback() {
     triggerGate(); // 그 단계 start에서 멈춰 그 단계 동작 대기
   }
 
-  function togglePlay() {
+  // 재생/정지 — 버튼과 제스처가 공유. 상태 ref도 즉시 동기화(루프에서 바로 읽음).
+  function doPause() {
     const p = playerRef.current;
     if (!p) return;
-    if (playing) {
-      p.pauseVideo();
-      setPlaying(false);
-      clearGate();
-      setAiGateState("waiting");
-      holdControls();
-    } else {
-      void enterLandscape(); // 첫 재생 탭(제스처) 시 가로 고정 시도
-      // 분석(게이트) 중에 재생을 누르면 = 그 게이트를 강제로 건너뛴다.
-      // → 다음 단계 start에서 다시 멈추도록 게이트 대상을 한 칸 전진.
-      if (aiGateState === "analyzing") pendingStepRef.current += 1;
-      clearGate();
-      p.playVideo();
-      setPlaying(true);
-      setAiGateState("waiting");
-      showThenHide();
-    }
+    p.pauseVideo();
+    setPlaying(false);
+    playingRef.current = false;
+    clearGate();
+    setAiGateState("waiting");
+    aiGateStateRef.current = "waiting";
+    holdControls();
+  }
+  function doPlay() {
+    const p = playerRef.current;
+    if (!p) return;
+    void enterLandscape(); // 재생 시 가로 고정 시도
+    // 분석(게이트) 중에 재생 = 그 게이트를 건너뜀 → 다음 단계 start에서 다시 멈추도록 전진.
+    if (aiGateStateRef.current === "analyzing") pendingStepRef.current += 1;
+    clearGate();
+    p.playVideo();
+    setPlaying(true);
+    playingRef.current = true;
+    setAiGateState("waiting");
+    aiGateStateRef.current = "waiting";
+    showThenHide();
+  }
+  function togglePlay() {
+    if (playingRef.current) doPause();
+    else doPlay();
   }
 
   function handleExit() {
@@ -300,6 +283,97 @@ export default function SyncPlayback() {
       }
     }, 400);
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── 항상 도는 인식 루프 ──
+  // pause/resume 제스처는 재생/정지 전 구간에서, 요리동작 게이트는 analyzing 동안만 판정.
+  // recognizeFrame은 틱당 1회만 호출(MediaPipe 타임스탬프 단조 증가 — 루프를 둘로 나누면 안 됨).
+  useEffect(() => {
+    let stopped = false;
+
+    // pause/resume 제스처 → 영상 재생/정지 (confidence 문턱 + 연속프레임 + 쿨다운)
+    function handleGesture(r: FrameResult) {
+      let intent: "pause" | "resume" | null = null;
+      let best = 0;
+      for (const h of r.hands) {
+        if (
+          (h.gesture === PAUSE_GESTURE || h.gesture === RESUME_GESTURE) &&
+          h.gestureScore >= GESTURE_CONF &&
+          h.gestureScore > best
+        ) {
+          intent = h.gesture === PAUSE_GESTURE ? "pause" : "resume";
+          best = h.gestureScore;
+        }
+      }
+
+      const hold = gestureHoldRef.current;
+      if (intent && intent === hold.label) hold.count += 1;
+      else {
+        hold.label = intent;
+        hold.count = intent ? 1 : 0;
+      }
+      if (!intent || hold.count < GESTURE_CONFIRM_FRAMES) return;
+
+      const now = performance.now();
+      if (now < cooldownUntilRef.current) return;
+
+      if (intent === "pause" && playingRef.current) doPause();
+      else if (intent === "resume" && !playingRef.current) doPlay();
+      else return; // 의도와 현재 상태가 안 맞으면 무시(이미 정지인데 pause 등)
+
+      cooldownUntilRef.current = now + GESTURE_COOLDOWN_MS;
+      hold.count = 0;
+    }
+
+    // analyzing 중: 요리동작이 확정되면 "인식됨" 표시 후 다음 단계로 재개
+    function runCookingGate(r: FrameResult, v: HTMLVideoElement) {
+      let confirmed: string | null;
+      try {
+        confirmed = deciderRef.current.process(
+          r,
+          v.videoWidth,
+          v.videoHeight,
+        ).confirmed;
+      } catch (e) {
+        console.error("[cv] 추론 오류", e);
+        return;
+      }
+      if (!confirmed) return;
+      if (GATE_MODE === "precise") {
+        const expectedKo = stepsRef.current[pendingStepRef.current]?.gesture;
+        if (expectedKo && ACTION_KO[confirmed] !== expectedKo) return;
+      }
+      setAiGateState("recognized");
+      aiGateStateRef.current = "recognized"; // 더는 게이트 판정 안 함
+      gateTimerRef.current = setTimeout(resumeAfterGate, RECOGNIZED_HOLD);
+    }
+
+    void createRecognizers()
+      .then(() => {
+        if (stopped) return;
+        cvLoopRef.current = setInterval(() => {
+          const v = camVideoRef.current;
+          if (!v || v.videoWidth === 0) return;
+          let r: FrameResult;
+          try {
+            r = recognizeFrame(v, performance.now());
+          } catch {
+            return; // 모델 미준비/일시 오류 → 다음 틱
+          }
+          handleGesture(r);
+          if (aiGateStateRef.current === "analyzing") runCookingGate(r, v);
+        }, 100); // 10fps
+      })
+      .catch((e) => {
+        console.error("[cv] 모델 로드 실패 — 제스처/게이트 비활성, 버튼으로 진행", e);
+      });
+
+    return () => {
+      stopped = true;
+      if (cvLoopRef.current) clearInterval(cvLoopRef.current);
+      cvLoopRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
