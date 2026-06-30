@@ -15,9 +15,9 @@
 
 | 영역 | 사용 기술 |
 |------|-----------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, Zustand |
+| Frontend | React 18, TypeScript, Tailwind CSS, Zustand |
 | Backend | FastAPI 0.136, PostgreSQL 18, SQLAlchemy 2.0, Alembic |
-| AI / CV | PyTorch, MediaPipe Tasks API, OpenCV |
+| AI / CV | MediaPipe Tasks API, OpenCV |
 | External APIs | YouTube Data API v3, YouTube IFrame API, Gemini API |
 
 ## 시스템 아키텍처
@@ -28,7 +28,7 @@
 OSSP/
 ├── backend/    # FastAPI 서버 + PostgreSQL DB
 ├── frontend/   # React + TypeScript 웹 앱
-├── ai/         # PyTorch + MediaPipe AI 추론 서버
+├── ai/         # MediaPipe 기반 커스터마이징 모델
 └── docs/       # 설계 문서 및 회의록
 ```
 
@@ -36,15 +36,15 @@ OSSP/
 
 - [Backend 가이드](./backend/README.md)
 - [Frontend 가이드](./frontend/README.md)
-- [AI 서버 가이드](./ai/README.md)
+- [AI 모델 가이드](./ai/README.md)
 
 ## 팀
 
 | 역할 | 담당 영역 |
 |------|-----------|
-| 팀원 A (Leader) | Frontend, CV/ML |
-| 팀원 B | Frontend, Backend (API) |
-| 팀원 C | Frontend, Backend (DB) |
+| 박준하 (Leader) | Frontend, CV/ML |
+| 강진주 | Frontend, Backend (API) |
+| 김도엽 | Frontend, Backend (DB) |
 
 ## 협업 방식
 
