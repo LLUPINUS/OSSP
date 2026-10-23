@@ -42,9 +42,9 @@ OSSP/
 
 | 역할 | 담당 영역 |
 |------|-----------|
-| 팀원 A (Leader) | Frontend, CV/ML |
-| 팀원 B | Frontend, Backend (API) |
-| 팀원 C | Frontend, Backend (DB) |
+| 박준하 (Leader) | Frontend, CV/ML |
+| 강진주 | Frontend, Backend (API) |
+| 김도엽 | Frontend, Backend (DB) |
 
 ## 협업 방식
 
